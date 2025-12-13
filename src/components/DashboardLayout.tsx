@@ -183,9 +183,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">TS</span>
+              <span className="text-white font-bold">BBT</span>
             </div>
-            <span className="font-bold text-xl dark:text-white">TireShop</span>
+            <span className="font-bold text-xl dark:text-white">Big Boy Tires</span>
           </div>
 
           <nav className="space-y-2">

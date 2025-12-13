@@ -57,7 +57,7 @@ export default function LoginPage() {
             <Lock className="text-white" size={40} />
           </motion.div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            TireShop Admin
+            Big Boy Tires
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Sign in to manage your tire shop
