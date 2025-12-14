@@ -2,7 +2,7 @@
 
 import { useTheme } from '@/contexts/ThemeContext';
 import {
-  Sun, Moon, Search, Bell,
+  Sun, Moon, Search, Bell, AlertTriangle,
   Users, Package, ClipboardList, TrendingUp, Home, LogOut, User
 } from 'lucide-react';
 import Link from 'next/link';
@@ -21,6 +21,14 @@ interface SearchResult {
   subtitle?: string;
 }
 
+interface LowStockItem {
+  id: string;
+  brand: string;
+  model: string;
+  size: string;
+  quantity: number;
+}
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
@@ -31,8 +39,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
   const navItems = [
@@ -57,6 +68,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     getUser();
   }, []);
 
+  // Fetch low stock items
+  useEffect(() => {
+    async function fetchLowStock() {
+      try {
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('id, brand, model, size, quantity')
+          .lt('quantity', 5)
+          .order('quantity', { ascending: true });
+
+        if (error) throw error;
+        setLowStockItems(data || []);
+      } catch (error) {
+        console.error('Error fetching low stock items:', error);
+      }
+    }
+    fetchLowStock();
+
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchLowStock, 30000);
+    return () => clearInterval(interval);
+  }, [supabase]);
+
   // Handle logout
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -72,6 +106,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       }
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setShowUserMenu(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -177,9 +214,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen animated-gradient relative">
+      {/* Film grain overlay */}
+      <div className="fixed inset-0 film-grain pointer-events-none z-0"></div>
+
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10">
+      <aside className="fixed left-0 top-0 h-full w-64 glass border-r z-10 shadow-2xl">
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -196,10 +236,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
                     active
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300'
+                      ? 'bg-blue-500/20 dark:bg-blue-500/30 text-blue-600 dark:text-blue-400 shadow-lg glow-blue backdrop-blur-xl border border-blue-500/30'
+                      : 'hover:bg-white/50 dark:hover:bg-gray-700/50 dark:text-gray-300 hover:shadow-lg hover:-translate-x-1 backdrop-blur-sm'
                   }`}
                 >
                   <Icon size={20} />
@@ -214,7 +254,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main Content */}
       <div className="ml-64">
         {/* Header */}
-        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-4 sticky top-0 z-20">
+        <header className="glass border-b px-8 py-4 sticky top-0 z-20 shadow-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
               <div ref={searchRef} className="relative flex-1 max-w-md">
@@ -285,10 +325,122 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <Moon size={20} />
                 )}
               </button>
-              <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 relative transition-colors">
-                <Bell size={20} className="dark:text-gray-300" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
+              {/* Notifications */}
+              <div className="relative" ref={notificationRef}>
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 relative transition-colors"
+                >
+                  <Bell size={20} className="dark:text-gray-300" />
+                  {lowStockItems.some(item => item.quantity === 0) ? (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                  ) : lowStockItems.length > 0 ? (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                  ) : null}
+                </button>
+
+                {/* Notifications Dropdown */}
+                {showNotifications && (
+                  <div className="absolute right-0 mt-3 w-[480px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 z-50 max-h-[700px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-300">
+                    {/* Header */}
+                    <div className="px-6 py-5 border-b border-gray-100/80 dark:border-gray-700/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-blue-500/10 dark:bg-blue-400/10">
+                            <Bell size={20} className="text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <h3 className="font-semibold text-lg dark:text-white">Notifications</h3>
+                        </div>
+                        {lowStockItems.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-full">
+                              {lowStockItems.length}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Notifications List */}
+                    <div className="overflow-y-auto flex-1 p-3">
+                      {lowStockItems.length === 0 ? (
+                        <div className="px-6 py-16 text-center">
+                          <p className="text-sm text-gray-400 dark:text-gray-500">
+                            No notifications
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {lowStockItems.map((item, index) => (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                router.push('/inventory');
+                                setShowNotifications(false);
+                              }}
+                              className="w-full p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-300 text-left rounded-xl group border border-gray-100 dark:border-gray-800 hover:border-orange-200 dark:hover:border-orange-900/50 hover:shadow-md"
+                              style={{
+                                animation: `slideIn 0.4s ease-out ${index * 0.06}s both`
+                              }}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="flex-shrink-0">
+                                  <div className={`p-3 rounded-xl transition-transform group-hover:scale-110 ${
+                                    item.quantity === 0
+                                      ? 'bg-red-50 dark:bg-red-900/20'
+                                      : 'bg-orange-50 dark:bg-orange-900/20'
+                                  }`}>
+                                    <AlertTriangle size={24} className={
+                                      item.quantity === 0
+                                        ? 'text-red-500 dark:text-red-400'
+                                        : 'text-orange-500 dark:text-orange-400'
+                                    } />
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-3 mb-1.5">
+                                    <p className="font-semibold text-base text-gray-900 dark:text-white truncate">
+                                      {item.brand} {item.model}
+                                    </p>
+                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
+                                      item.quantity === 0
+                                        ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                                        : 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'
+                                    }`}>
+                                      {item.quantity === 0 ? 'OUT OF STOCK' : `${item.quantity} left`}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                                    Size: {item.size}
+                                  </p>
+                                  <div className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                      item.quantity === 0 ? 'bg-red-500' : 'bg-orange-500'
+                                    } animate-pulse`}></span>
+                                    {item.quantity === 0 ? 'Restock immediately' : 'Low stock alert'}
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <style jsx>{`
+                  @keyframes slideIn {
+                    from {
+                      opacity: 0;
+                      transform: translateY(-10px);
+                    }
+                    to {
+                      opacity: 1;
+                      transform: translateY(0);
+                    }
+                  }
+                `}</style>
+              </div>
 
               {/* User Menu */}
               <div className="relative pl-4 border-l border-gray-200 dark:border-gray-700" ref={userMenuRef}>

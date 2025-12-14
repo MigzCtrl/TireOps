@@ -134,18 +134,18 @@ export default function CustomersPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 lg:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold dark:text-white mb-2">Customers</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold dark:text-white mb-2">Customers</h1>
             <p className="text-gray-600 dark:text-gray-400">
               Manage your customer database
             </p>
           </div>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 btn-glass-primary btn-press w-full sm:w-auto justify-center"
           >
             {showForm ? 'Cancel' : <><Plus size={20} /> Add Customer</>}
           </button>
@@ -168,12 +168,12 @@ export default function CustomersPage() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="card-glass p-6"
           >
             <h2 className="text-xl font-semibold dark:text-white mb-4">
               {editingId ? 'Edit Customer' : 'Add New Customer'}
             </h2>
-            <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium dark:text-gray-300 mb-1">
                   Name *
@@ -220,10 +220,10 @@ export default function CustomersPage() {
                   className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="w-full btn-glass-primary py-3 btn-press"
                 >
                   {editingId ? 'Update Customer' : 'Add Customer'}
                 </button>
@@ -233,24 +233,24 @@ export default function CustomersPage() {
         )}
 
         {/* Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="card-glass overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                     Name
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                     Email
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                     Phone
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                     Address
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                  <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
                     Actions
                   </th>
                 </tr>
@@ -260,7 +260,7 @@ export default function CustomersPage() {
                   <tr>
                     <td
                       colSpan={5}
-                      className="px-6 py-12 text-center text-gray-500 dark:text-gray-400"
+                      className="px-3 sm:px-6 py-12 text-center text-gray-500 dark:text-gray-400"
                     >
                       {searchTerm
                         ? `No customers found matching "${searchTerm}"`
@@ -276,37 +276,37 @@ export default function CustomersPage() {
                       transition={{ delay: index * 0.05 }}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
                     >
-                      <td className="px-6 py-4 font-medium dark:text-white">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 font-medium dark:text-white">
                         {customer.name}
                       </td>
-                      <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600 dark:text-gray-400">
                         {customer.email || '-'}
                       </td>
-                      <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600 dark:text-gray-400">
                         {customer.phone}
                       </td>
-                      <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 text-gray-600 dark:text-gray-400">
                         {customer.address || '-'}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                      <td className="px-3 sm:px-6 py-3 sm:py-4">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           <button
                             onClick={() => startEdit(customer)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            className="p-1.5 sm:p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                             title="Edit"
                           >
                             <Edit size={16} />
                           </button>
                           <Link
                             href={`/customers/${customer.id}`}
-                            className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                            className="p-1.5 sm:p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
                             title="View Details"
                           >
                             <Eye size={16} />
                           </Link>
                           <button
                             onClick={() => handleDelete(customer.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             title="Delete"
                           >
                             <Trash2 size={16} />

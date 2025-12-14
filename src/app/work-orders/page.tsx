@@ -385,11 +385,11 @@ export default function WorkOrdersPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 lg:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold dark:text-white mb-2">Work Orders</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold dark:text-white mb-2">Work Orders</h1>
             <p className="text-gray-600 dark:text-gray-400">
               Manage service appointments and work orders
             </p>
@@ -402,7 +402,7 @@ export default function WorkOrdersPage() {
                 setShowForm(true);
               }
             }}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 btn-glass-primary btn-press w-full sm:w-auto justify-center"
           >
             {showForm ? 'Cancel' : <><Plus size={20} /> New Work Order</>}
           </button>
@@ -413,26 +413,26 @@ export default function WorkOrdersPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="stats-card p-4 lg:p-6"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Orders</div>
+            <div className="flex flex-col items-center justify-center text-center space-y-2">
+              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Orders</div>
               <ClipboardList className="text-blue-600" size={20} />
             </div>
-            <div className="text-3xl font-bold dark:text-white">{workOrders.length}</div>
+            <div className="text-5xl stat-number text-white font-bold dark:text-white">{workOrders.length}</div>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="stats-card p-4 lg:p-6"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Pending</div>
+            <div className="flex flex-col items-center justify-center text-center space-y-2">
+              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Pending</div>
               <Clock className="text-yellow-600" size={20} />
             </div>
-            <div className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">
+            <div className="text-5xl stat-number text-white font-bold text-yellow-600 dark:text-yellow-400">
               {workOrders.filter((o) => o.status === 'pending').length}
             </div>
           </motion.div>
@@ -441,13 +441,13 @@ export default function WorkOrdersPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="stats-card p-4 lg:p-6"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-600 dark:text-gray-400">In Progress</div>
+            <div className="flex flex-col items-center justify-center text-center space-y-2">
+              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">In Progress</div>
               <ClipboardList className="text-blue-600" size={20} />
             </div>
-            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+            <div className="text-5xl stat-number text-white font-bold text-blue-600 dark:text-blue-400">
               {workOrders.filter((o) => o.status === 'in_progress').length}
             </div>
           </motion.div>
@@ -456,13 +456,13 @@ export default function WorkOrdersPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="stats-card p-4 lg:p-6"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Completed</div>
+            <div className="flex flex-col items-center justify-center text-center space-y-2">
+              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Completed</div>
               <ClipboardList className="text-green-600" size={20} />
             </div>
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+            <div className="text-5xl stat-number text-white font-bold text-green-600 dark:text-green-400">
               {workOrders.filter((o) => o.status === 'completed').length}
             </div>
           </motion.div>
@@ -473,24 +473,23 @@ export default function WorkOrdersPage() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="card-glass p-4 lg:p-6"
           >
             <h2 className="text-xl font-semibold dark:text-white mb-4">
               {editingOrderId ? 'Edit Work Order' : 'Create Work Order'}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                    Customer *
+                    Customer
                   </label>
                   <select
-                    required
                     value={formData.customer_id}
                     onChange={(e) =>
                       setFormData({ ...formData, customer_id: e.target.value })
                     }
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all"
                   >
                     <option value="">Select a customer</option>
                     {customers.map((customer) => (
@@ -502,15 +501,14 @@ export default function WorkOrdersPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                    Service Type *
+                    Service Type
                   </label>
                   <select
-                    required
                     value={formData.service_type}
                     onChange={(e) =>
                       setFormData({ ...formData, service_type: e.target.value })
                     }
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all"
                   >
                     <option value="">Select service</option>
                     <option value="Tire Installation">Tire Installation</option>
@@ -520,7 +518,7 @@ export default function WorkOrdersPage() {
                     <option value="Tire Balance">Tire Balance</option>
                   </select>
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-2">
                   <label className="block text-sm font-medium dark:text-gray-300 mb-2">
                     Select Tires *
                   </label>
@@ -562,7 +560,7 @@ export default function WorkOrdersPage() {
                                   <div className="font-medium dark:text-white">
                                     {tire.brand} {tire.model}
                                   </div>
-                                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                                  <div className="text-sm stat-label text-gray-600 dark:text-gray-400">
                                     Size: {tire.size}
                                   </div>
                                 </div>
@@ -570,7 +568,7 @@ export default function WorkOrdersPage() {
                                   <div className="font-semibold text-blue-600 dark:text-blue-400">
                                     ${tire.price.toFixed(2)}
                                   </div>
-                                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                                  <div className="text-sm stat-label text-gray-600 dark:text-gray-400">
                                     Stock: {tire.quantity}
                                   </div>
                                 </div>
@@ -601,11 +599,11 @@ export default function WorkOrdersPage() {
                                 <div className="font-medium dark:text-white">
                                   {selectedTire.brand} {selectedTire.model}
                                 </div>
-                                <div className="text-sm text-gray-600 dark:text-gray-400">
+                                <div className="text-sm stat-label text-gray-600 dark:text-gray-400">
                                   {selectedTire.size} • ${selectedTire.price.toFixed(2)} each
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3">
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                                 <div className="flex items-center gap-2">
                                   <label className="text-sm font-medium dark:text-white">Qty:</label>
                                   <input
@@ -623,7 +621,7 @@ export default function WorkOrdersPage() {
                                 <button
                                   type="button"
                                   onClick={() => addTireToOrder(currentTireId, currentTireQuantity)}
-                                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 justify-center"
                                 >
                                   <Plus size={18} />
                                   Add
@@ -651,11 +649,11 @@ export default function WorkOrdersPage() {
                               <div className="font-medium dark:text-white">
                                 {tire.brand} {tire.model} ({tire.size})
                               </div>
-                              <div className="text-sm text-gray-600 dark:text-gray-400">
+                              <div className="text-sm stat-label text-gray-600 dark:text-gray-400">
                                 ${item.unit_price.toFixed(2)} each
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                               <div className="flex items-center gap-2">
                                 <label className="text-sm text-gray-600 dark:text-gray-400">Qty:</label>
                                 <input
@@ -675,7 +673,7 @@ export default function WorkOrdersPage() {
                               <button
                                 type="button"
                                 onClick={() => removeTireFromOrder(item.tire_id)}
-                                className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                className="p-1.5 sm:p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
                                 title="Remove"
                               >
                                 <X size={18} />
@@ -695,33 +693,100 @@ export default function WorkOrdersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                    Scheduled Date *
+                  <label className="block text-sm font-medium dark:text-gray-300 mb-2">
+                    Scheduled Date
                   </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.scheduled_date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, scheduled_date: e.target.value })
-                    }
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, scheduled_date: new Date().toISOString().split('T')[0] })}
+                      className="px-3 py-1.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        setFormData({ ...formData, scheduled_date: tomorrow.toISOString().split('T')[0] });
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextWeek = new Date();
+                        nextWeek.setDate(nextWeek.getDate() + 7);
+                        setFormData({ ...formData, scheduled_date: nextWeek.toISOString().split('T')[0] });
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                    >
+                      Next Week
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="date"
+                      value={formData.scheduled_date}
+                      onChange={(e) =>
+                        setFormData({ ...formData, scheduled_date: e.target.value })
+                      }
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all"
+                    />
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium dark:text-gray-300 mb-2">
                     Scheduled Time
                   </label>
-                  <input
-                    type="time"
-                    value={formData.scheduled_time}
-                    onChange={(e) =>
-                      setFormData({ ...formData, scheduled_time: e.target.value })
-                    }
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, scheduled_time: '09:00' })}
+                      className="px-3 py-1.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                    >
+                      9 AM
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, scheduled_time: '12:00' })}
+                      className="px-3 py-1.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                    >
+                      12 PM
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, scheduled_time: '15:00' })}
+                      className="px-3 py-1.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                    >
+                      3 PM
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, scheduled_time: '17:00' })}
+                      className="px-3 py-1.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                    >
+                      5 PM
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="time"
+                      value={formData.scheduled_time}
+                      onChange={(e) =>
+                        setFormData({ ...formData, scheduled_time: e.target.value })
+                      }
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all"
+                    />
+                  </div>
                 </div>
               </div>
               <div>
@@ -737,7 +802,7 @@ export default function WorkOrdersPage() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                className="w-full btn-glass-primary py-3 btn-press"
               >
                 {editingOrderId ? 'Update Work Order' : 'Create Work Order'}
               </button>
@@ -748,7 +813,7 @@ export default function WorkOrdersPage() {
         {/* Work Orders List */}
         <div className="space-y-4">
           {workOrders.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+            <div className="card-glass p-8 text-center">
               <p className="text-gray-500 dark:text-gray-400">
                 No work orders yet. Click "New Work Order" to get started.
               </p>
@@ -760,9 +825,9 @@ export default function WorkOrdersPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+                className="card-glass p-4 lg:p-6 lift-hover"
               >
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-0 mb-4">
                   <div>
                     <h3 className="text-xl font-bold dark:text-white">
                       {order.customer_name}
@@ -784,7 +849,7 @@ export default function WorkOrdersPage() {
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4">
                   <div>
                     <span className="text-gray-600 dark:text-gray-400">Tire:</span>
                     <p className="font-medium dark:text-white">{order.tire_info}</p>
@@ -805,23 +870,23 @@ export default function WorkOrdersPage() {
                     </div>
                   )}
                   {order.notes && (
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
                       <span className="text-gray-600 dark:text-gray-400">Notes:</span>
                       <p className="font-medium dark:text-white">{order.notes}</p>
                     </div>
                   )}
                 </div>
-                <div className="flex justify-end gap-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div className="flex justify-end gap-2 sm:gap-3 border-t border-gray-200 dark:border-gray-700 pt-4">
                   <button
                     onClick={() => startEditingOrder(order)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    className="p-1.5 sm:p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                     title="Edit"
                   >
                     <Edit size={18} />
                   </button>
                   <button
                     onClick={() => openDeleteModal(order.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                     title="Delete"
                   >
                     <Trash2 size={18} />
@@ -838,7 +903,7 @@ export default function WorkOrdersPage() {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700 shadow-2xl"
+              className="bg-white dark:bg-gray-800 rounded-2xl p-4 lg:p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700 shadow-2xl"
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-full">
@@ -854,7 +919,7 @@ export default function WorkOrdersPage() {
                 Are you sure you want to delete this work order? All associated data will be permanently removed.
               </p>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={closeDeleteModal}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"

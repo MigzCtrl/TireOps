@@ -29,6 +29,8 @@ export default function InventoryPage() {
   const [editingQuantityId, setEditingQuantityId] = useState<string | null>(null);
   const [tempQuantity, setTempQuantity] = useState<string>('');
   const [editingTireId, setEditingTireId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deletingTire, setDeletingTire] = useState<Tire | null>(null);
   const [formData, setFormData] = useState({
     brand: '',
     model: '',
@@ -117,14 +119,25 @@ export default function InventoryPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Are you sure you want to delete this tire?')) return;
+  function confirmDelete(tire: Tire) {
+    setDeletingTire(tire);
+    setDeleteConfirmId(tire.id);
+  }
+
+  function cancelDelete() {
+    setDeletingTire(null);
+    setDeleteConfirmId(null);
+  }
+
+  async function handleDelete() {
+    if (!deleteConfirmId) return;
 
     try {
-      const { error } = await supabase.from('inventory').delete().eq('id', id);
+      const { error } = await supabase.from('inventory').delete().eq('id', deleteConfirmId);
 
       if (error) throw error;
       loadInventory();
+      cancelDelete();
     } catch (error) {
       console.error('Error deleting tire:', error);
       alert('Error deleting tire');
@@ -161,12 +174,16 @@ export default function InventoryPage() {
   async function saveQuantity(id: string) {
     const newQuantity = parseInt(tempQuantity);
     if (isNaN(newQuantity) || newQuantity < 0) {
-      alert('Please enter a valid quantity (0 or greater)');
+      cancelEditingQuantity();
       return;
     }
     await updateQuantity(id, newQuantity);
     setEditingQuantityId(null);
     setTempQuantity('');
+  }
+
+  async function handleQuantityBlur(id: string) {
+    await saveQuantity(id);
   }
 
   function startEditingTire(tire: Tire) {
@@ -260,26 +277,26 @@ export default function InventoryPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 lg:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold dark:text-white mb-2">Inventory</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold dark:text-white mb-2">Inventory</h1>
             <p className="text-gray-600 dark:text-gray-400">
               Manage your tire inventory and stock levels
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
             <button
               onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-3 btn-glass text-white hover:glow-blue-hover btn-press w-full sm:w-auto justify-center"
             >
               <Download size={20} />
               Export CSV
             </button>
             <button
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-6 py-3 btn-glass-primary btn-press w-full sm:w-auto justify-center"
             >
               {showForm ? 'Cancel' : <><Plus size={20} /> Add Tire</>}
             </button>
@@ -291,26 +308,26 @@ export default function InventoryPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="stats-card p-6"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Items</div>
+            <div className="flex flex-col items-center justify-center text-center space-y-2">
+              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Items</div>
               <Package className="text-blue-600" size={20} />
             </div>
-            <div className="text-3xl font-bold dark:text-white">{inventory.length}</div>
+            <div className="text-5xl stat-number text-white font-bold">{inventory.length}</div>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="stats-card p-6"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Units</div>
+            <div className="flex flex-col items-center justify-center text-center space-y-2">
+              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Units</div>
               <Package className="text-purple-600" size={20} />
             </div>
-            <div className="text-3xl font-bold dark:text-white">
+            <div className="text-5xl stat-number text-white font-bold">
               {inventory.reduce((sum, item) => sum + item.quantity, 0)}
             </div>
           </motion.div>
@@ -319,10 +336,10 @@ export default function InventoryPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="stats-card p-6"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Value</div>
+            <div className="flex flex-col items-center justify-center text-center space-y-2">
+              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Value</div>
               <Package className="text-green-600" size={20} />
             </div>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">
@@ -340,13 +357,13 @@ export default function InventoryPage() {
               placeholder="Search by brand, model, or size..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-3 rounded-xl glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium transition-all duration-200"
             />
           </div>
           <select
             value={stockFilter}
             onChange={(e) => setStockFilter(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-3 rounded-xl glass-select dark:text-white transition-all duration-200"
           >
             <option value="all">All Stock Levels</option>
             <option value="in-stock">In Stock ({">"} 0)</option>
@@ -360,10 +377,10 @@ export default function InventoryPage() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+            className="card-glass p-6"
           >
             <h2 className="text-xl font-semibold dark:text-white mb-4">Add New Tire</h2>
-            <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium dark:text-gray-300 mb-1">
                   Brand *
@@ -375,7 +392,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, brand: e.target.value })
                   }
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                 />
               </div>
               <div>
@@ -389,7 +406,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, model: e.target.value })
                   }
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                 />
               </div>
               <div>
@@ -404,7 +421,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, size: e.target.value })
                   }
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                 />
               </div>
               <div>
@@ -419,7 +436,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, quantity: parseInt(e.target.value) })
                   }
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                 />
               </div>
               <div>
@@ -435,10 +452,10 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, price: parseFloat(e.target.value) })
                   }
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                 />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <label className="block text-sm font-medium dark:text-gray-300 mb-1">
                   Description
                 </label>
@@ -447,14 +464,14 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, description: e.target.value })
                   }
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                   rows={3}
                 />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1 sm:col-span-2">
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="w-full btn-glass-primary py-3 btn-press"
                 >
                   Add Tire
                 </button>
@@ -466,7 +483,7 @@ export default function InventoryPage() {
         {/* Tire List */}
         <div className="space-y-4">
           {filteredInventory.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-200 dark:border-gray-700">
+            <div className="card-glass p-8 text-center">
               <p className="text-gray-500 dark:text-gray-400">
                 {searchTerm || stockFilter !== 'all'
                   ? 'No tires match your filters'
@@ -480,20 +497,20 @@ export default function InventoryPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+                className="card-glass p-4 lg:p-6 lift-hover"
               >
                 {editingTireId === tire.id ? (
                   /* Edit Form */
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold dark:text-white mb-4">Edit Tire</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium dark:text-gray-300 mb-1">Brand</label>
                         <input
                           type="text"
                           value={formData.brand}
                           onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                         />
                       </div>
                       <div>
@@ -502,7 +519,7 @@ export default function InventoryPage() {
                           type="text"
                           value={formData.model}
                           onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                         />
                       </div>
                       <div>
@@ -511,7 +528,7 @@ export default function InventoryPage() {
                           type="text"
                           value={formData.size}
                           onChange={(e) => setFormData({ ...formData, size: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                         />
                       </div>
                       <div>
@@ -521,29 +538,29 @@ export default function InventoryPage() {
                           step="0.01"
                           value={formData.price}
                           onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                         />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1 sm:col-span-2">
                         <label className="block text-sm font-medium dark:text-gray-300 mb-1">Description</label>
                         <textarea
                           value={formData.description}
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
                           rows={2}
                         />
                       </div>
                     </div>
-                    <div className="flex gap-3 justify-end">
+                    <div className="flex flex-col sm:flex-row gap-3 justify-end">
                       <button
                         onClick={cancelEditingTire}
-                        className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+                        className="px-4 py-2 btn-glass rounded-lg hover:bg-white/20 dark:hover:bg-gray-700/50 transition-all btn-press w-full sm:w-auto"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={() => saveEditedTire(tire.id)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="px-4 py-2 btn-glass-primary rounded-lg btn-press w-full sm:w-auto"
                       >
                         Save Changes
                       </button>
@@ -552,7 +569,7 @@ export default function InventoryPage() {
                 ) : (
                   /* Regular View */
                   <>
-                    <div className="flex justify-between items-start">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-4 sm:gap-0">
                       <div className="flex-1">
                         <h3 className="text-xl font-bold dark:text-white">
                           {tire.brand} {tire.model}
@@ -564,43 +581,33 @@ export default function InventoryPage() {
                           </p>
                         )}
                       </div>
-                      <div className="text-right">
+                      <div className="text-left sm:text-right w-full sm:w-auto">
                         <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                           ${tire.price.toFixed(2)}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">per tire</p>
                       </div>
                     </div>
-                <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-4 w-full sm:w-auto">
                     <span className="text-sm font-medium dark:text-gray-300">Quantity:</span>
                     {editingQuantityId === tire.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min="0"
-                          value={tempQuantity}
-                          onChange={(e) => setTempQuantity(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveQuantity(tire.id);
-                            if (e.key === 'Escape') cancelEditingQuantity();
-                          }}
-                          className="w-20 px-3 py-2 rounded-lg border border-blue-500 dark:border-blue-400 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => saveQuantity(tire.id)}
-                          className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={cancelEditingQuantity}
-                          className="px-3 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        value={tempQuantity}
+                        onChange={(e) => setTempQuantity(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            saveQuantity(tire.id);
+                          }
+                          if (e.key === 'Escape') cancelEditingQuantity();
+                        }}
+                        onBlur={() => handleQuantityBlur(tire.id)}
+                        className="w-16 px-2 py-1 text-center text-lg font-bold bg-gray-100 dark:bg-gray-700 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 transition-all duration-200"
+                        autoFocus
+                      />
                     ) : (
                       <>
                         <div className="flex items-center gap-2">
@@ -644,7 +651,7 @@ export default function InventoryPage() {
                       </>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 w-full sm:w-auto justify-end">
                     <button
                       onClick={() => startEditingTire(tire)}
                       className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
@@ -653,7 +660,7 @@ export default function InventoryPage() {
                       <Edit size={18} />
                     </button>
                     <button
-                      onClick={() => handleDelete(tire.id)}
+                      onClick={() => confirmDelete(tire)}
                       className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                       title="Delete"
                     >
@@ -667,6 +674,51 @@ export default function InventoryPage() {
             ))
           )}
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmId && deletingTire && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="glass rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-200/50 dark:border-gray-700/50"
+            >
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/20">
+                  <Trash2 size={24} className="text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold dark:text-white">Delete Tire?</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">This action cannot be undone</p>
+                </div>
+              </div>
+
+              <div className="glass rounded-lg p-4 mb-6 border border-gray-200/30 dark:border-gray-700/30">
+                <p className="font-semibold text-gray-900 dark:text-white mb-1">
+                  {deletingTire.brand} {deletingTire.model}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Size: {deletingTire.size} • Quantity: {deletingTire.quantity}
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelDelete}
+                  className="flex-1 px-4 py-3 btn-glass text-gray-900 dark:text-white rounded-xl hover:bg-white/20 dark:hover:bg-gray-700/50 transition-all font-medium btn-press"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 px-4 py-3 bg-red-600/90 backdrop-blur-xl border border-red-500/50 text-white rounded-xl hover:bg-red-700 hover:shadow-[0_0_30px_rgba(239,68,68,0.4)] transition-all font-medium btn-press"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

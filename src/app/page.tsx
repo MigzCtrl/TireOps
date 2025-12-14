@@ -88,32 +88,42 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4 lg:space-y-6">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold dark:text-white mb-2">Overview</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold dark:text-white mb-2">Overview</h1>
             <p className="text-gray-600 dark:text-gray-400">Monitor key metrics and manage your platform</p>
           </div>
 
-          {/* Hero Section with Time & Weather */}
+          {/* Hero Section with Time & Business Info */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-8 mb-8 text-white"
+            className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 rounded-3xl p-6 lg:p-8 mb-8 text-white border border-blue-500/20 shadow-2xl"
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold mb-2">Fresh start, Demo</h2>
-                <p className="text-blue-100 mb-6">Ready to make today productive! 🚀</p>
-                <div className="text-6xl font-bold">{formatTime(time)}</div>
-                <div className="mt-2 text-blue-100">{formatDate(time)}</div>
+            {/* Animated background gradient */}
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-purple-500/10 animate-pulse" style={{ animationDuration: '8s' }}></div>
+
+            {/* Glass effect overlay */}
+            <div className="absolute inset-0 backdrop-blur-3xl bg-white/5"></div>
+
+            <div className="relative z-10 flex flex-col lg:flex-row items-center lg:items-center justify-between gap-6 lg:gap-0">
+              <div className="text-center lg:text-left">
+                <h2 className="text-2xl lg:text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+                  Big Boy Tires Dashboard
+                </h2>
+                <p className="text-blue-200 mb-6 text-lg">Warren, Ohio • Professional Tire Management</p>
+                <div className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight">{formatTime(time)}</div>
+                <div className="mt-3 text-blue-200 text-lg lg:text-xl">{formatDate(time)}</div>
               </div>
-              <div className="text-right">
-                <div className="flex items-center gap-2 mb-2">
-                  <Cloud size={32} />
-                  <span className="text-5xl font-bold">17°C</span>
+              <div className="text-center lg:text-right flex flex-col sm:flex-row gap-4">
+                <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20">
+                  <div className="text-sm text-blue-200 mb-2">Revenue Today</div>
+                  <div className="text-4xl font-bold">${stats.totalRevenue.toFixed(0)}</div>
                 </div>
-                <div className="text-blue-100">Overcast</div>
-                <div className="text-sm text-blue-200">Los Angeles</div>
+                <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20">
+                  <div className="text-sm text-blue-200 mb-2">Active Orders</div>
+                  <div className="text-4xl font-bold">{stats.pendingOrders}</div>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -124,56 +134,52 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+              className="stats-card p-6"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400">Total Customers</div>
-                <Users className="text-blue-600" size={20} />
+              <div className="flex flex-col items-center justify-center text-center space-y-2">
+                <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Customers</div>
+                <div className="text-5xl stat-number text-white font-bold">{stats.totalCustomers}</div>
+                <div className="text-sm text-green-300">+12% from last month</div>
               </div>
-              <div className="text-3xl font-bold dark:text-white">{stats.totalCustomers}</div>
-              <div className="text-sm text-green-600 mt-2">+12% from last month</div>
             </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+              className="stats-card p-6"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400">Active Orders</div>
-                <ClipboardList className="text-purple-600" size={20} />
+              <div className="flex flex-col items-center justify-center text-center space-y-2">
+                <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Active Orders</div>
+                <div className="text-5xl stat-number text-white font-bold">{stats.pendingOrders}</div>
+                <div className="text-sm text-green-300">+5% increase</div>
               </div>
-              <div className="text-3xl font-bold dark:text-white">{stats.pendingOrders}</div>
-              <div className="text-sm text-green-600 mt-2">+5% increase</div>
             </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+              className="stats-card p-6"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400">Task Completion</div>
-                <TrendingUp className="text-green-600" size={20} />
+              <div className="flex flex-col items-center justify-center text-center space-y-2">
+                <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Task Completion</div>
+                <div className="text-5xl stat-number text-white font-bold">{taskCompletion}%</div>
+                <div className="text-sm text-green-300">+5% progress</div>
               </div>
-              <div className="text-3xl font-bold dark:text-white">{taskCompletion}%</div>
-              <div className="text-sm text-green-600 mt-2">+5% progress</div>
             </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+              className="stats-card p-6"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400">Avg. Response Time</div>
-                <Clock className="text-orange-600" size={20} />
+              <div className="flex flex-col items-center justify-center text-center space-y-2">
+                <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Avg. Response Time</div>
+                <div className="text-5xl stat-number text-white font-bold">32 min</div>
+                <div className="text-sm text-green-300">+0% change</div>
               </div>
-              <div className="text-3xl font-bold dark:text-white">32 min</div>
-              <div className="text-sm text-red-600 mt-2">+0% change</div>
             </motion.div>
           </div>
 
@@ -184,7 +190,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+              className="stats-card p-6"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold dark:text-white">Quick Tasks</h3>
