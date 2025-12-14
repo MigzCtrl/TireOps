@@ -1,0 +1,11 @@
+   ▲ Next.js 16.0.10 (Turbopack)
+   - Local:         http://localhost:3000
+   - Network:       http://0.0.0.0:3000
+   - Environments: .env.local
+   - Experiments (use with caution):
+     · serverActions
+
+ ✓ Starting...
+ ⨯ Unable to acquire lock at D:\Tire-Shop-MVP\.next\dev\lock, is another instance of next dev running?
+   Suggestion: If you intended to restart next dev, terminate the other process, and then try again.
+[?25h
