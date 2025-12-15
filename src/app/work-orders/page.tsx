@@ -417,9 +417,8 @@ export default function WorkOrdersPage() {
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Orders</div>
-              <ClipboardList className="text-blue-600" size={20} />
+              <div className="text-5xl stat-number text-white font-bold">{workOrders.length}</div>
             </div>
-            <div className="text-5xl stat-number text-white font-bold dark:text-white">{workOrders.length}</div>
           </motion.div>
 
           <motion.div
@@ -430,10 +429,9 @@ export default function WorkOrdersPage() {
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Pending</div>
-              <Clock className="text-yellow-600" size={20} />
-            </div>
-            <div className="text-5xl stat-number text-white font-bold text-yellow-600 dark:text-yellow-400">
-              {workOrders.filter((o) => o.status === 'pending').length}
+              <div className="text-5xl stat-number text-white font-bold">
+                {workOrders.filter((o) => o.status === 'pending').length}
+              </div>
             </div>
           </motion.div>
 
@@ -445,10 +443,9 @@ export default function WorkOrdersPage() {
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">In Progress</div>
-              <ClipboardList className="text-blue-600" size={20} />
-            </div>
-            <div className="text-5xl stat-number text-white font-bold text-blue-600 dark:text-blue-400">
-              {workOrders.filter((o) => o.status === 'in_progress').length}
+              <div className="text-5xl stat-number text-white font-bold">
+                {workOrders.filter((o) => o.status === 'in_progress').length}
+              </div>
             </div>
           </motion.div>
 
@@ -460,10 +457,9 @@ export default function WorkOrdersPage() {
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Completed</div>
-              <ClipboardList className="text-green-600" size={20} />
-            </div>
-            <div className="text-5xl stat-number text-white font-bold text-green-600 dark:text-green-400">
-              {workOrders.filter((o) => o.status === 'completed').length}
+              <div className="text-5xl stat-number text-white font-bold">
+                {workOrders.filter((o) => o.status === 'completed').length}
+              </div>
             </div>
           </motion.div>
         </div>
