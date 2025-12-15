@@ -2,39 +2,67 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { motion } from 'framer-motion';
-import { Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, UserPlus, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
   const supabase = createClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
-  async function handleLogin(e: React.FormEvent) {
+  // Password validation
+  const validatePassword = (): string | null => {
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters long';
+    }
+    if (password !== confirmPassword) {
+      return 'Passwords do not match';
+    }
+    return null;
+  };
+
+  async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess(false);
+
+    // Validate password
+    const validationError = validatePassword();
+    if (validationError) {
+      setError(validationError);
+      setLoading(false);
+      return;
+    }
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
       });
 
-      if (signInError) throw signInError;
+      if (signUpError) throw signUpError;
 
       if (data.user) {
-        router.push('/');
-        router.refresh();
+        setSuccess(true);
+
+        // Auto-redirect to dashboard after 1.5 seconds
+        setTimeout(() => {
+          router.push('/');
+          router.refresh();
+        }, 1500);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in');
+      setError(err.message || 'Failed to sign up');
     } finally {
       setLoading(false);
     }
@@ -55,24 +83,24 @@ export default function LoginPage() {
             transition={{ delay: 0.1 }}
             className="inline-block p-4 bg-blue-600 rounded-2xl mb-4"
           >
-            <Lock className="text-white" size={40} />
+            <UserPlus className="text-white" size={40} />
           </motion.div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
             Big Boy Tires
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Sign in to manage your tire shop
+            Create your admin account
           </p>
         </div>
 
-        {/* Login Card */}
+        {/* Signup Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700"
         >
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleSignup} className="space-y-6">
             {/* Email Field */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -107,7 +135,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  placeholder="Enter your password"
+                  placeholder="Minimum 6 characters"
                   className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 />
                 <button
@@ -116,6 +144,40 @@ export default function LoginPage() {
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showPassword ? (
+                    <EyeOff className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" size={20} />
+                  ) : (
+                    <Eye className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" size={20} />
+                  )}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Must be at least 6 characters
+              </p>
+            </div>
+
+            {/* Confirm Password Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="text-gray-400" size={20} />
+                </div>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  placeholder="Re-enter your password"
+                  className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                >
+                  {showConfirmPassword ? (
                     <EyeOff className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" size={20} />
                   ) : (
                     <Eye className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" size={20} />
@@ -135,29 +197,53 @@ export default function LoginPage() {
               </motion.div>
             )}
 
+            {/* Success Message */}
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="text-green-600 dark:text-green-400" size={20} />
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    Account created successfully! Redirecting to dashboard...
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || success}
               className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Signing in...</span>
+                  <span>Creating account...</span>
+                </div>
+              ) : success ? (
+                <div className="flex items-center justify-center gap-2">
+                  <CheckCircle size={20} />
+                  <span>Account created!</span>
                 </div>
               ) : (
-                'Sign In'
+                'Create Account'
               )}
             </button>
           </form>
 
-          {/* Sign Up Link */}
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-800 dark:text-blue-300 text-center">
-              Don't have an account?{' '}
-              <Link href="/signup" className="font-semibold hover:underline">
-                Sign up
+          {/* Link to Login */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Already have an account?{' '}
+              <Link
+                href="/login"
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
+              >
+                Sign in
               </Link>
             </p>
           </div>
