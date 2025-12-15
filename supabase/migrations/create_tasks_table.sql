@@ -18,25 +18,26 @@ CREATE INDEX IF NOT EXISTS idx_tasks_completed ON public.tasks(completed);
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 
 -- Create policies so users can only see their own tasks
+-- OR allow guest user (00000000-0000-0000-0000-000000000000) to see all guest tasks
 CREATE POLICY "Users can view their own tasks"
   ON public.tasks
   FOR SELECT
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id OR user_id = '00000000-0000-0000-0000-000000000000'::uuid);
 
 CREATE POLICY "Users can insert their own tasks"
   ON public.tasks
   FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (auth.uid() = user_id OR user_id = '00000000-0000-0000-0000-000000000000'::uuid);
 
 CREATE POLICY "Users can update their own tasks"
   ON public.tasks
   FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id OR user_id = '00000000-0000-0000-0000-000000000000'::uuid);
 
 CREATE POLICY "Users can delete their own tasks"
   ON public.tasks
   FOR DELETE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id OR user_id = '00000000-0000-0000-0000-000000000000'::uuid);
 
 -- Enable realtime for tasks table
 ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;

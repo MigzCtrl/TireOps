@@ -47,9 +47,13 @@ export default function DashboardPage() {
   async function loadUser() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
+      // Use a default guest user ID if no authentication
+      // In production, you'd want proper auth, but this allows testing
+      setUserId(user?.id || '00000000-0000-0000-0000-000000000000');
     } catch (error) {
       console.error('Error loading user:', error);
+      // Fallback to guest user if auth fails
+      setUserId('00000000-0000-0000-0000-000000000000');
     }
   }
 
