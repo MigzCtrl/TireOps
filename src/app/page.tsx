@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Package, ClipboardList, TrendingUp,
-  Clock, Cloud, Plus, Check
+  Clock, Cloud, Plus, Check, Trash2, Edit3, X
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -24,6 +24,8 @@ export default function DashboardPage() {
   const [newTaskInput, setNewTaskInput] = useState('');
   const [showTaskFeedback, setShowTaskFeedback] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskText, setEditingTaskText] = useState('');
 
   const supabase = createClient();
 
@@ -161,10 +163,63 @@ export default function DashboardPage() {
     }
   };
 
+  const deleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
+  };
+
+  const startEditingTask = (task: { id: string; title: string }) => {
+    setEditingTaskId(task.id);
+    setEditingTaskText(task.title);
+  };
+
+  const cancelEditingTask = () => {
+    setEditingTaskId(null);
+    setEditingTaskText('');
+  };
+
+  const saveEditedTask = async (taskId: string) => {
+    if (!editingTaskText.trim()) {
+      cancelEditingTask();
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ title: editingTaskText.trim(), updated_at: new Date().toISOString() })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      setEditingTaskId(null);
+      setEditingTaskText('');
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
+
   const handleTaskKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       addTask();
+    }
+  };
+
+  const handleEditKeyPress = (e: React.KeyboardEvent, taskId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveEditedTask(taskId);
+    } else if (e.key === 'Escape') {
+      cancelEditingTask();
     }
   };
 
@@ -399,14 +454,62 @@ export default function DashboardPage() {
                         )}
                       </button>
 
-                      {/* Task Text */}
-                      <span className={`flex-1 text-sm leading-snug transition-all duration-300 ${
-                        task.completed
-                          ? 'line-through text-blue-200/50'
-                          : 'text-white'
-                      }`}>
-                        <span className="line-clamp-1">{task.title}</span>
-                      </span>
+                      {/* Task Text or Edit Input */}
+                      {editingTaskId === task.id ? (
+                        <input
+                          type="text"
+                          value={editingTaskText}
+                          onChange={(e) => setEditingTaskText(e.target.value)}
+                          onKeyDown={(e) => handleEditKeyPress(e, task.id)}
+                          onBlur={() => saveEditedTask(task.id)}
+                          autoFocus
+                          className="flex-1 px-2 py-1 text-sm bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50"
+                        />
+                      ) : (
+                        <span className={`flex-1 text-sm leading-snug transition-all duration-300 ${
+                          task.completed
+                            ? 'line-through text-blue-200/50'
+                            : 'text-white'
+                        }`}>
+                          <span className="line-clamp-1">{task.title}</span>
+                        </span>
+                      )}
+
+                      {/* Edit and Delete Buttons */}
+                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        {editingTaskId === task.id ? (
+                          <button
+                            onClick={cancelEditingTask}
+                            className="p-1.5 rounded-lg hover:bg-white/10 text-red-400 hover:text-red-300 transition-colors"
+                            title="Cancel"
+                          >
+                            <X size={14} />
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingTask(task);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-white/10 text-blue-300 hover:text-blue-200 transition-colors"
+                              title="Edit task"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteTask(task.id);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                              title="Delete task"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </motion.div>
                   ))}
                 </AnimatePresence>
