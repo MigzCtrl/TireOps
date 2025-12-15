@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Package, ClipboardList, TrendingUp,
-  Clock, Cloud
+  Clock, Cloud, Plus, Check
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -24,6 +24,9 @@ export default function DashboardPage() {
     { id: 2, title: 'Update inventory levels', completed: false },
     { id: 3, title: 'Process pending orders', completed: true },
   ]);
+  const [taskFilter, setTaskFilter] = useState<'active' | 'completed'>('active');
+  const [newTaskInput, setNewTaskInput] = useState('');
+  const [showTaskFeedback, setShowTaskFeedback] = useState(false);
 
   const supabase = createClient();
 
@@ -74,6 +77,32 @@ export default function DashboardPage() {
       hour12: true,
     });
   };
+
+  const addTask = () => {
+    if (!newTaskInput.trim()) return;
+
+    const newTask = {
+      id: Date.now(),
+      title: newTaskInput.trim(),
+      completed: false,
+    };
+
+    setTasks([...tasks, newTask]);
+    setNewTaskInput('');
+    setShowTaskFeedback(true);
+    setTimeout(() => setShowTaskFeedback(false), 2000);
+  };
+
+  const handleTaskKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addTask();
+    }
+  };
+
+  const filteredTasks = tasks.filter(t =>
+    taskFilter === 'active' ? !t.completed : t.completed
+  );
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -190,48 +219,170 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="stats-card p-6"
+              className="stats-card p-4 sm:p-6"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold dark:text-white">Quick Tasks</h3>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 dark:text-white">
-                    Active ({tasks.filter(t => !t.completed).length})
+              {/* Header */}
+              <h3 className="text-lg font-semibold text-white mb-4">Quick Tasks</h3>
+
+              {/* Segmented Control */}
+              <div className="relative mb-4 p-1 glass rounded-xl border border-white/10">
+                <div className="grid grid-cols-2 gap-1 relative">
+                  {/* Animated Background Slider */}
+                  <motion.div
+                    className="absolute inset-y-1 w-[calc(50%-4px)] bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg"
+                    initial={false}
+                    animate={{
+                      x: taskFilter === 'active' ? 4 : 'calc(100% + 4px)'
+                    }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  />
+
+                  {/* Active Button */}
+                  <button
+                    onClick={() => setTaskFilter('active')}
+                    className={`relative z-10 py-2.5 px-4 rounded-lg text-sm font-medium transition-colors ${
+                      taskFilter === 'active'
+                        ? 'text-white'
+                        : 'text-blue-200 hover:text-white'
+                    }`}
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      Active
+                      <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                        taskFilter === 'active'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-blue-500/20 text-blue-200'
+                      }`}>
+                        {tasks.filter(t => !t.completed).length}
+                      </span>
+                    </span>
                   </button>
-                  <button className="px-3 py-1 text-sm rounded-lg dark:text-gray-400">
-                    Completed ({tasks.filter(t => t.completed).length})
+
+                  {/* Completed Button */}
+                  <button
+                    onClick={() => setTaskFilter('completed')}
+                    className={`relative z-10 py-2.5 px-4 rounded-lg text-sm font-medium transition-colors ${
+                      taskFilter === 'completed'
+                        ? 'text-white'
+                        : 'text-blue-200 hover:text-white'
+                    }`}
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      Done
+                      <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                        taskFilter === 'completed'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-blue-500/20 text-blue-200'
+                      }`}>
+                        {tasks.filter(t => t.completed).length}
+                      </span>
+                    </span>
                   </button>
                 </div>
               </div>
 
-              <div className="space-y-2 mb-4">
-                {tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={task.completed}
-                      onChange={() => {
-                        setTasks(tasks.map(t =>
-                          t.id === task.id ? { ...t, completed: !t.completed } : t
-                        ));
-                      }}
-                      className="w-4 h-4"
-                    />
-                    <span className={`flex-1 ${task.completed ? 'line-through text-gray-400' : 'dark:text-white'}`}>
-                      {task.title}
-                    </span>
+              {/* Task List */}
+              <div className="space-y-2 mb-4 min-h-[180px]">
+                <AnimatePresence mode="popLayout">
+                  {filteredTasks.map((task) => (
+                    <motion.div
+                      key={task.id}
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.2 }}
+                      className={`group flex items-center gap-3 py-3 px-4 rounded-xl border transition-all duration-300 ${
+                        task.completed
+                          ? 'bg-white/5 border-white/5 opacity-60'
+                          : 'bg-gradient-to-r from-white/10 to-white/5 border-white/10 hover:border-white/20 hover:shadow-lg hover:shadow-blue-500/10'
+                      }`}
+                    >
+                      {/* Custom Checkbox */}
+                      <button
+                        onClick={() => {
+                          setTasks(tasks.map(t =>
+                            t.id === task.id ? { ...t, completed: !t.completed } : t
+                          ));
+                        }}
+                        className={`relative flex-shrink-0 w-5 h-5 rounded-full border-2 transition-all duration-300 ${
+                          task.completed
+                            ? 'bg-blue-500 border-blue-500 shadow-lg shadow-blue-500/50'
+                            : 'border-blue-300/50 hover:border-blue-400 hover:shadow-md hover:shadow-blue-400/30'
+                        }`}
+                        style={{ minHeight: '44px', minWidth: '44px', width: '20px', height: '20px' }}
+                      >
+                        {task.completed && (
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="absolute inset-0 flex items-center justify-center"
+                          >
+                            <Check size={12} className="text-white" strokeWidth={3} />
+                          </motion.div>
+                        )}
+                      </button>
+
+                      {/* Task Text */}
+                      <span className={`flex-1 text-sm leading-snug transition-all duration-300 ${
+                        task.completed
+                          ? 'line-through text-blue-200/50'
+                          : 'text-white'
+                      }`}>
+                        <span className="line-clamp-1">{task.title}</span>
+                      </span>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                {filteredTasks.length === 0 && (
+                  <div className="flex items-center justify-center py-8 text-sm text-blue-200/50">
+                    {taskFilter === 'active' ? 'No active tasks' : 'No completed tasks'}
                   </div>
-                ))}
+                )}
               </div>
 
-              <input
-                type="text"
-                placeholder="Add a quick task..."
-                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {/* Add Task Input */}
+              <div className="relative">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newTaskInput}
+                    onChange={(e) => setNewTaskInput(e.target.value)}
+                    onKeyPress={handleTaskKeyPress}
+                    placeholder="Add a new task..."
+                    className="flex-1 px-4 py-2.5 rounded-xl glass border border-white/10 text-white placeholder-blue-200/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50 transition-all text-sm"
+                  />
+                  <button
+                    onClick={addTask}
+                    disabled={!newTaskInput.trim()}
+                    className={`px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all font-medium text-sm ${
+                      newTaskInput.trim()
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:shadow-blue-500/50 active:scale-95'
+                        : 'bg-white/5 text-blue-200/30 cursor-not-allowed'
+                    }`}
+                  >
+                    <Plus size={16} />
+                    <span className="hidden sm:inline">Add</span>
+                  </button>
+                </div>
+
+                {/* Toast Feedback */}
+                <AnimatePresence>
+                  {showTaskFeedback && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute -top-12 left-0 right-0 flex items-center justify-center"
+                    >
+                      <div className="px-4 py-2 bg-green-500 text-white text-sm rounded-lg shadow-lg flex items-center gap-2">
+                        <Check size={16} />
+                        Task added!
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </motion.div>
 
             {/* Performance Insights */}
