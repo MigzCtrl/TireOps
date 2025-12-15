@@ -19,14 +19,11 @@ export default function DashboardPage() {
     totalRevenue: 0,
     lowStockItems: 0
   });
-  const [tasks, setTasks] = useState([
-    { id: 1, title: 'Review customer feedback', completed: false },
-    { id: 2, title: 'Update inventory levels', completed: false },
-    { id: 3, title: 'Process pending orders', completed: true },
-  ]);
+  const [tasks, setTasks] = useState<Array<{ id: string; title: string; completed: boolean }>>([]);
   const [taskFilter, setTaskFilter] = useState<'active' | 'completed'>('active');
   const [newTaskInput, setNewTaskInput] = useState('');
   const [showTaskFeedback, setShowTaskFeedback] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -37,7 +34,65 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadStats();
+    loadUser();
   }, []);
+
+  useEffect(() => {
+    if (userId) {
+      loadTasks();
+      subscribeToTasks();
+    }
+  }, [userId]);
+
+  async function loadUser() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    } catch (error) {
+      console.error('Error loading user:', error);
+    }
+  }
+
+  async function loadTasks() {
+    if (!userId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTasks(data || []);
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    }
+  }
+
+  function subscribeToTasks() {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel('tasks-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          loadTasks();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
 
   async function loadStats() {
     try {
@@ -78,19 +133,28 @@ export default function DashboardPage() {
     });
   };
 
-  const addTask = () => {
-    if (!newTaskInput.trim()) return;
+  const addTask = async () => {
+    if (!newTaskInput.trim() || !userId) return;
 
-    const newTask = {
-      id: Date.now(),
-      title: newTaskInput.trim(),
-      completed: false,
-    };
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .insert([
+          {
+            user_id: userId,
+            title: newTaskInput.trim(),
+            completed: false,
+          },
+        ]);
 
-    setTasks([...tasks, newTask]);
-    setNewTaskInput('');
-    setShowTaskFeedback(true);
-    setTimeout(() => setShowTaskFeedback(false), 2000);
+      if (error) throw error;
+
+      setNewTaskInput('');
+      setShowTaskFeedback(true);
+      setTimeout(() => setShowTaskFeedback(false), 2000);
+    } catch (error) {
+      console.error('Error adding task:', error);
+    }
   };
 
   const handleTaskKeyPress = (e: React.KeyboardEvent) => {
@@ -299,10 +363,19 @@ export default function DashboardPage() {
                     >
                       {/* Custom Checkbox */}
                       <button
-                        onClick={() => {
-                          setTasks(tasks.map(t =>
-                            t.id === task.id ? { ...t, completed: !t.completed } : t
-                          ));
+                        onClick={async () => {
+                          const updatedCompleted = !task.completed;
+
+                          try {
+                            const { error } = await supabase
+                              .from('tasks')
+                              .update({ completed: updatedCompleted, updated_at: new Date().toISOString() })
+                              .eq('id', task.id);
+
+                            if (error) throw error;
+                          } catch (error) {
+                            console.error('Error updating task:', error);
+                          }
                         }}
                         className={`relative flex-shrink-0 w-5 h-5 rounded-full border-2 transition-all duration-300 ${
                           task.completed
