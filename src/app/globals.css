@@ -22,16 +22,35 @@
 
 html {
   scroll-behavior: smooth;
+  height: 100%;
+  /* Fix for Safari mobile address bar */
+  min-height: -webkit-fill-available;
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   @apply bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100;
   min-height: 100vh;
+  /* Fix for Safari mobile address bar */
+  min-height: -webkit-fill-available;
+  /* Prevent overscroll bounce on iOS */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dark body {
   background: linear-gradient(to bottom, rgb(15, 23, 42), rgb(15, 23, 42) 50%, rgb(30, 41, 59));
+}
+
+/* iOS Safari fixes */
+#__next {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+}
+
+/* Prevent background showing on overscroll */
+html, body, #__next {
+  overscroll-behavior-y: none;
 }
 
 /* Premium Glass Morphism Utilities */
