@@ -312,9 +312,8 @@ export default function InventoryPage() {
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Items</div>
-              <Package className="text-blue-600" size={20} />
+              <div className="text-5xl stat-number text-white font-bold">{inventory.length}</div>
             </div>
-            <div className="text-5xl stat-number text-white font-bold">{inventory.length}</div>
           </motion.div>
 
           <motion.div
@@ -325,10 +324,9 @@ export default function InventoryPage() {
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Units</div>
-              <Package className="text-purple-600" size={20} />
-            </div>
-            <div className="text-5xl stat-number text-white font-bold">
-              {inventory.reduce((sum, item) => sum + item.quantity, 0)}
+              <div className="text-5xl stat-number text-white font-bold">
+                {inventory.reduce((sum, item) => sum + item.quantity, 0)}
+              </div>
             </div>
           </motion.div>
 
@@ -340,10 +338,9 @@ export default function InventoryPage() {
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Value</div>
-              <Package className="text-green-600" size={20} />
-            </div>
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              ${totalValue.toFixed(2)}
+              <div className="text-5xl stat-number text-white font-bold">
+                ${totalValue.toFixed(2)}
+              </div>
             </div>
           </motion.div>
         </div>
