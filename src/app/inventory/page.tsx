@@ -7,6 +7,7 @@ import { Package, Plus, Search, Download, Trash2, Edit } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import Stepper from '@/components/Stepper';
+import Dropdown, { type DropdownOption } from '@/components/Dropdown';
 
 interface Tire {
   id: string;
@@ -40,6 +41,13 @@ export default function InventoryPage() {
   });
 
   const supabase = createClient();
+
+  const stockFilterOptions: DropdownOption[] = [
+    { value: 'all', label: 'All Stock Levels', description: 'Show all items' },
+    { value: 'in-stock', label: 'In Stock', description: 'Items with quantity > 0' },
+    { value: 'low-stock', label: 'Low Stock', description: 'Items with 1-9 units' },
+    { value: 'out-of-stock', label: 'Out of Stock', description: 'Items with 0 units' },
+  ];
 
   useEffect(() => {
     loadInventory();
@@ -331,16 +339,12 @@ export default function InventoryPage() {
               className="w-full pl-10 pr-4 py-3 rounded-xl glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium transition-all duration-200"
             />
           </div>
-          <select
+          <Dropdown
+            options={stockFilterOptions}
             value={stockFilter}
-            onChange={(e) => setStockFilter(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl glass-select dark:text-white transition-all duration-200"
-          >
-            <option value="all">All Stock Levels</option>
-            <option value="in-stock">In Stock ({">"} 0)</option>
-            <option value="low-stock">Low Stock (1-9)</option>
-            <option value="out-of-stock">Out of Stock (0)</option>
-          </select>
+            onChange={setStockFilter}
+            placeholder="Filter by stock level"
+          />
         </div>
 
         {/* Form */}
