@@ -311,17 +311,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="lg:ml-64">
         {/* Header */}
         <header className="glass border-b px-4 lg:px-8 py-4 sticky top-0 z-30 shadow-lg">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             {/* Hamburger button for mobile */}
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
             >
               <Menu size={24} className="dark:text-white" />
             </button>
 
-            <div className="flex items-center gap-4 flex-1">
-              <div ref={searchRef} className="relative flex-1 max-w-md hidden lg:block">
+            {/* Search Bar - visible on medium screens and up */}
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              <div ref={searchRef} className="relative flex-1 max-w-md hidden md:block">
                 <form onSubmit={handleGlobalSearch} className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                   <input
@@ -378,10 +379,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            {/* Right side buttons - flex-shrink-0 to prevent collapsing */}
+            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
               >
                 {theme === 'dark' ? (
                   <Sun size={20} className="text-yellow-500" />
@@ -390,7 +392,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 )}
               </button>
               {/* Notifications */}
-              <div className="relative" ref={notificationRef}>
+              <div className="relative flex-shrink-0" ref={notificationRef}>
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 relative transition-colors"
