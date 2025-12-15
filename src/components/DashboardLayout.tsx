@@ -3,7 +3,7 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   Sun, Moon, Search, Bell, AlertTriangle,
-  Users, Package, ClipboardList, TrendingUp, Home, LogOut, User
+  Users, Package, ClipboardList, TrendingUp, Home, LogOut, User, Menu, X
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -41,6 +41,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -114,6 +115,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [mobileMenuOpen]);
 
   // Search for customers and tires as user types
   useEffect(() => {
@@ -218,14 +236,31 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Film grain overlay */}
       <div className="fixed inset-0 film-grain pointer-events-none z-0"></div>
 
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        ></div>
+      )}
+
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 glass border-r z-10 shadow-2xl">
+      <aside className={`fixed left-0 top-0 h-full w-64 glass border-r z-50 shadow-2xl transition-transform duration-300 lg:translate-x-0 ${
+        mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold">BBT</span>
             </div>
             <span className="font-bold text-xl dark:text-white">Big Boy Tires</span>
+            {/* Close button for mobile */}
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="ml-auto lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <X size={20} className="dark:text-white" />
+            </button>
           </div>
 
           <nav className="space-y-2">
@@ -252,12 +287,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <div className="ml-64">
+      <div className="lg:ml-64">
         {/* Header */}
-        <header className="glass border-b px-8 py-4 sticky top-0 z-20 shadow-lg">
+        <header className="glass border-b px-4 lg:px-8 py-4 sticky top-0 z-20 shadow-lg">
           <div className="flex items-center justify-between">
+            {/* Hamburger button for mobile */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <Menu size={24} className="dark:text-white" />
+            </button>
+
             <div className="flex items-center gap-4 flex-1">
-              <div ref={searchRef} className="relative flex-1 max-w-md">
+              <div ref={searchRef} className="relative flex-1 max-w-md hidden lg:block">
                 <form onSubmit={handleGlobalSearch} className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                   <input
@@ -451,7 +494,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
                     <User size={18} className="text-white" />
                   </div>
-                  <span className="font-medium dark:text-white">
+                  <span className="font-medium dark:text-white hidden sm:inline">
                     {userEmail ? userEmail.split('@')[0] : 'Admin'}
                   </span>
                 </button>
@@ -478,7 +521,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="p-8">{children}</main>
+        <main className="p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );
