@@ -3,9 +3,10 @@
 import { useEffect, useState, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Package, Plus, Search, Download, Minus, Trash2, Edit } from 'lucide-react';
+import { Package, Plus, Search, Download, Trash2, Edit } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
+import Stepper from '@/components/Stepper';
 
 interface Tire {
   id: string;
@@ -26,8 +27,6 @@ export default function InventoryPage() {
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
-  const [editingQuantityId, setEditingQuantityId] = useState<string | null>(null);
-  const [tempQuantity, setTempQuantity] = useState<string>('');
   const [editingTireId, setEditingTireId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletingTire, setDeletingTire] = useState<Tire | null>(null);
@@ -159,31 +158,6 @@ export default function InventoryPage() {
       console.error('Error updating quantity:', error);
       alert('Error updating quantity');
     }
-  }
-
-  function startEditingQuantity(tire: Tire) {
-    setEditingQuantityId(tire.id);
-    setTempQuantity(tire.quantity.toString());
-  }
-
-  function cancelEditingQuantity() {
-    setEditingQuantityId(null);
-    setTempQuantity('');
-  }
-
-  async function saveQuantity(id: string) {
-    const newQuantity = parseInt(tempQuantity);
-    if (isNaN(newQuantity) || newQuantity < 0) {
-      cancelEditingQuantity();
-      return;
-    }
-    await updateQuantity(id, newQuantity);
-    setEditingQuantityId(null);
-    setTempQuantity('');
-  }
-
-  async function handleQuantityBlur(id: string) {
-    await saveQuantity(id);
   }
 
   function startEditingTire(tire: Tire) {
@@ -425,15 +399,11 @@ export default function InventoryPage() {
                 <label className="block text-sm font-medium dark:text-gray-300 mb-1">
                   Quantity *
                 </label>
-                <input
-                  type="number"
-                  required
-                  min="0"
+                <Stepper
                   value={formData.quantity}
-                  onChange={(e) =>
-                    setFormData({ ...formData, quantity: parseInt(e.target.value) })
-                  }
-                  className="w-full px-4 py-2 rounded-lg glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium"
+                  onChange={(value) => setFormData({ ...formData, quantity: value })}
+                  min={0}
+                  className="justify-start"
                 />
               </div>
               <div>
@@ -588,65 +558,26 @@ export default function InventoryPage() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center gap-4 w-full sm:w-auto">
                     <span className="text-sm font-medium dark:text-gray-300">Quantity:</span>
-                    {editingQuantityId === tire.id ? (
-                      <input
-                        type="number"
-                        min="0"
-                        value={tempQuantity}
-                        onChange={(e) => setTempQuantity(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            saveQuantity(tire.id);
-                          }
-                          if (e.key === 'Escape') cancelEditingQuantity();
-                        }}
-                        onBlur={() => handleQuantityBlur(tire.id)}
-                        className="w-16 px-2 py-1 text-center text-lg font-bold bg-gray-100 dark:bg-gray-700 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 transition-all duration-200"
-                        autoFocus
-                      />
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => updateQuantity(tire.id, tire.quantity - 1)}
-                            className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                            title="Decrease by 1"
-                          >
-                            <Minus size={16} className="dark:text-white" />
-                          </button>
-                          <button
-                            onClick={() => startEditingQuantity(tire)}
-                            className="font-bold text-lg w-16 text-center dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg py-1 transition-colors"
-                            title="Click to edit quantity"
-                          >
-                            {tire.quantity}
-                          </button>
-                          <button
-                            onClick={() => updateQuantity(tire.id, tire.quantity + 1)}
-                            className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                            title="Increase by 1"
-                          >
-                            <Plus size={16} className="dark:text-white" />
-                          </button>
-                        </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            tire.quantity === 0
-                              ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-                              : tire.quantity < 10
-                              ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'
-                              : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                          }`}
-                        >
-                          {tire.quantity === 0
-                            ? 'Out of Stock'
-                            : tire.quantity < 10
-                            ? 'Low Stock'
-                            : 'In Stock'}
-                        </span>
-                      </>
-                    )}
+                    <Stepper
+                      value={tire.quantity}
+                      onChange={(newValue) => updateQuantity(tire.id, newValue)}
+                      min={0}
+                    />
+                    <span
+                      className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        tire.quantity === 0
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                          : tire.quantity < 10
+                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'
+                          : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                      }`}
+                    >
+                      {tire.quantity === 0
+                        ? 'Out of Stock'
+                        : tire.quantity < 10
+                        ? 'Low Stock'
+                        : 'In Stock'}
+                    </span>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto justify-end">
                     <button
