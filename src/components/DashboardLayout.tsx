@@ -133,6 +133,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     };
   }, [mobileMenuOpen]);
 
+  // Prevent body scroll when notifications are open on mobile
+  useEffect(() => {
+    if (showNotifications) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showNotifications]);
+
   // Search for customers and tires as user types
   useEffect(() => {
     const searchData = async () => {
@@ -384,7 +396,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
                 {/* Notifications Dropdown */}
                 {showNotifications && (
-                  <div className="fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto top-16 sm:top-auto sm:mt-3 w-auto sm:w-[480px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 z-[100] max-h-[calc(100vh-5rem)] sm:max-h-[700px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div
+                    className="fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto top-16 sm:top-auto sm:mt-3 w-auto sm:w-[480px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 z-[100] max-h-[calc(100vh-5rem)] sm:max-h-[700px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-300"
+                    onTouchMove={(e) => e.stopPropagation()}
+                  >
                     {/* Header */}
                     <div className="px-6 py-5 border-b border-gray-100/80 dark:border-gray-700/50">
                       <div className="flex items-center justify-between">
