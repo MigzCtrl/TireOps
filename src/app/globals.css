@@ -23,11 +23,9 @@
 html {
   scroll-behavior: smooth;
   height: 100%;
-  width: 100%;
   /* Fix for Safari mobile address bar */
+  min-height: 100vh;
   min-height: -webkit-fill-available;
-  position: fixed;
-  overflow: hidden;
 }
 
 body {
@@ -36,14 +34,11 @@ body {
   min-height: 100vh;
   /* Fix for Safari mobile address bar */
   min-height: -webkit-fill-available;
-  height: 100%;
-  width: 100%;
   /* Prevent overscroll bounce on iOS */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  position: fixed;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* Ensure background covers viewport on Safari */
+  background-attachment: fixed;
 }
 
 .dark body {
@@ -55,11 +50,9 @@ body {
 #__next {
   min-height: 100vh;
   min-height: -webkit-fill-available;
-  height: 100%;
-  width: 100%;
 }
 
-/* Prevent background showing on overscroll */
+/* Prevent white background showing on overscroll */
 html, body, #__next {
   overscroll-behavior-y: none;
 }
