@@ -289,7 +289,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main Content */}
       <div className="lg:ml-64">
         {/* Header */}
-        <header className="glass border-b px-4 lg:px-8 py-4 sticky top-0 z-20 shadow-lg">
+        <header className="glass border-b px-4 lg:px-8 py-4 sticky top-0 z-30 shadow-lg">
           <div className="flex items-center justify-between">
             {/* Hamburger button for mobile */}
             <button
@@ -384,7 +384,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
                 {/* Notifications Dropdown */}
                 {showNotifications && (
-                  <div className="absolute right-0 mt-3 w-[480px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 z-50 max-h-[700px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto top-16 sm:top-auto sm:mt-3 w-auto sm:w-[480px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 z-[100] max-h-[calc(100vh-5rem)] sm:max-h-[700px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-300">
                     {/* Header */}
                     <div className="px-6 py-5 border-b border-gray-100/80 dark:border-gray-700/50">
                       <div className="flex items-center justify-between">
