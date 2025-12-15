@@ -26,6 +26,10 @@ html {
   /* Fix for Safari mobile address bar */
   min-height: 100vh;
   min-height: -webkit-fill-available;
+  /* Extend into safe areas on iOS */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* Match body background to extend into safe areas */
+  background: linear-gradient(to bottom right, rgb(248, 250, 252), rgb(226, 232, 240));
 }
 
 body {
@@ -37,13 +41,14 @@ body {
   /* Prevent overscroll bounce on iOS */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  /* Ensure background covers viewport on Safari */
-  background-attachment: fixed;
+}
+
+.dark html {
+  background: linear-gradient(to bottom, rgb(15, 23, 42), rgb(30, 41, 59));
 }
 
 .dark body {
   background: linear-gradient(to bottom, rgb(15, 23, 42), rgb(15, 23, 42) 50%, rgb(30, 41, 59));
-  background-attachment: fixed;
 }
 
 /* iOS Safari fixes */
