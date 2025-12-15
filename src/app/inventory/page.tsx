@@ -244,23 +244,34 @@ export default function InventoryPage() {
       ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `inventory-${new Date().toISOString().split('T')[0]}.csv`;
+    // Try clipboard copy first (cleaner UX)
+    try {
+      await navigator.clipboard.writeText(csvContent);
+      setExportStatus('success');
 
-    // Use download attribute to trigger download without opening save dialog
-    link.setAttribute('download', link.download);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+      // Reset status after showing success
+      setTimeout(() => setExportStatus('idle'), 3000);
+    } catch (clipboardError) {
+      // Fallback to traditional download if clipboard fails
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `inventory-${new Date().toISOString().split('T')[0]}.csv`;
+      link.style.display = 'none';
 
-    setExportStatus('success');
+      document.body.appendChild(link);
+      link.click();
 
-    // Reset status after animation
-    setTimeout(() => setExportStatus('idle'), 2000);
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      setExportStatus('success');
+      setTimeout(() => setExportStatus('idle'), 2000);
+    }
   }
 
   if (loading) {
@@ -299,17 +310,17 @@ export default function InventoryPage() {
               {exportStatus === 'exporting' ? (
                 <>
                   <Loader2 size={20} className="animate-spin" />
-                  Exporting...
+                  Copying...
                 </>
               ) : exportStatus === 'success' ? (
                 <>
                   <Check size={20} className="text-green-400" />
-                  Exported!
+                  Copied to Clipboard!
                 </>
               ) : (
                 <>
                   <Download size={20} />
-                  Export CSV
+                  Copy CSV
                 </>
               )}
             </button>
