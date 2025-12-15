@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Package, Plus, Search, Download, Trash2, Edit } from 'lucide-react';
+import { Package, Plus, Search, Download, Trash2, Edit, Check, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import Stepper from '@/components/Stepper';
@@ -31,6 +31,7 @@ export default function InventoryPage() {
   const [editingTireId, setEditingTireId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletingTire, setDeletingTire] = useState<Tire | null>(null);
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle');
   const [formData, setFormData] = useState({
     brand: '',
     model: '',
@@ -222,7 +223,12 @@ export default function InventoryPage() {
     0
   );
 
-  function exportToCSV() {
+  async function exportToCSV() {
+    setExportStatus('exporting');
+
+    // Small delay to show the exporting state
+    await new Promise(resolve => setTimeout(resolve, 300));
+
     const headers = ['Brand', 'Model', 'Size', 'Quantity', 'Price', 'Description'];
     const rows = filteredInventory.map((tire) => [
       tire.brand,
@@ -238,13 +244,23 @@ export default function InventoryPage() {
       ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `inventory-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inventory-${new Date().toISOString().split('T')[0]}.csv`;
+
+    // Use download attribute to trigger download without opening save dialog
+    link.setAttribute('download', link.download);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+
+    setExportStatus('success');
+
+    // Reset status after animation
+    setTimeout(() => setExportStatus('idle'), 2000);
   }
 
   if (loading) {
@@ -271,10 +287,31 @@ export default function InventoryPage() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
             <button
               onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-3 btn-glass text-white hover:glow-blue-hover btn-press w-full sm:w-auto justify-center"
+              disabled={exportStatus !== 'idle'}
+              className={`flex items-center gap-2 px-4 py-3 btn-glass text-white btn-press w-full sm:w-auto justify-center transition-all duration-300 ${
+                exportStatus === 'success'
+                  ? 'bg-green-500/20 border-green-500/50'
+                  : exportStatus === 'exporting'
+                  ? 'opacity-75 cursor-wait'
+                  : 'hover:glow-blue-hover'
+              }`}
             >
-              <Download size={20} />
-              Export CSV
+              {exportStatus === 'exporting' ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Exporting...
+                </>
+              ) : exportStatus === 'success' ? (
+                <>
+                  <Check size={20} className="text-green-400" />
+                  Exported!
+                </>
+              ) : (
+                <>
+                  <Download size={20} />
+                  Export CSV
+                </>
+              )}
             </button>
             <button
               onClick={() => setShowForm(!showForm)}
