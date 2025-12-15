@@ -79,10 +79,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           .lt('quantity', 5)
           .order('quantity', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+          // Silently fail if no access (e.g., RLS blocking without auth)
+          // This prevents console spam for apps without auth enabled
+          if (error.code !== 'PGRST301') {
+            console.error('Error fetching low stock items:', error);
+          }
+          setLowStockItems([]);
+          return;
+        }
         setLowStockItems(data || []);
       } catch (error) {
-        console.error('Error fetching low stock items:', error);
+        // Fail gracefully - just set empty array
+        setLowStockItems([]);
       }
     }
     fetchLowStock();
