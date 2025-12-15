@@ -23,8 +23,11 @@
 html {
   scroll-behavior: smooth;
   height: 100%;
+  width: 100%;
   /* Fix for Safari mobile address bar */
   min-height: -webkit-fill-available;
+  position: fixed;
+  overflow: hidden;
 }
 
 body {
@@ -33,19 +36,27 @@ body {
   min-height: 100vh;
   /* Fix for Safari mobile address bar */
   min-height: -webkit-fill-available;
+  height: 100%;
+  width: 100%;
   /* Prevent overscroll bounce on iOS */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+  position: fixed;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .dark body {
   background: linear-gradient(to bottom, rgb(15, 23, 42), rgb(15, 23, 42) 50%, rgb(30, 41, 59));
+  background-attachment: fixed;
 }
 
 /* iOS Safari fixes */
 #__next {
   min-height: 100vh;
   min-height: -webkit-fill-available;
+  height: 100%;
+  width: 100%;
 }
 
 /* Prevent background showing on overscroll */
