@@ -5,10 +5,6 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 export const metadata: Metadata = {
   title: 'Tire Shop MVP',
   description: 'Modern tire shop management system',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f172a' }
-  ],
 };
 
 export const viewport: Viewport = {
@@ -29,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body suppressHydrationWarning className="antialiased">
         <ThemeProvider>{children}</ThemeProvider>
       </body>

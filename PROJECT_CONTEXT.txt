@@ -1,0 +1,229 @@
+====================================
+TIRE SHOP MVP - PROJECT CONTEXT
+====================================
+Last Updated: 2025-12-16
+Project Location: D:\Tire-Shop-MVP
+
+====================================
+CURRENT STATUS
+====================================
+
+✅ ALL TASKS COMPLETED - Ready for next session
+
+The application is fully functional with all recent features implemented and working:
+
+1. ✅ Calendar integrated with real work orders (past/upcoming appointments)
+2. ✅ Day overlay modal for detailed timeline view
+3. ✅ Scroll locking fixed on all modals (calendar + work orders)
+4. ✅ Timezone-corrected date display (dates show correctly now)
+5. ✅ Custom dark-themed DateTimePicker component
+6. ✅ Comprehensive tire selector with faceted filtering + cart
+7. ✅ Business hours time picker (5 AM - 9 PM with smart defaults)
+8. ✅ Hero card reverted to original design (per user request)
+
+====================================
+RECENT WORK COMPLETED
+====================================
+
+LAST SESSION WORK:
+- Calendar now shows all work orders with visual indicators (blue dots for upcoming, gray for past)
+- Clicking a calendar day opens a beautiful overlay modal with full timeline
+- Background scroll locking works on both calendar and work order modals
+- Fixed timezone bug where dates scheduled for 15th showed as 14th
+- Created custom DateTimePicker.tsx with dark glass theme (no white popovers)
+- Upgraded tire selection to faceted picker with:
+  * Auto-filters by customer vehicle tire size
+  * Width/Aspect/Rim + Brand filters
+  * In-stock toggle
+  * Shopping cart with totals
+  * Keyboard navigation (Arrow keys + Enter)
+  * Quick "Add 2 Tires" and "Add 4 Tires" presets
+- Time picker now shows business hours only (5 AM - 9 PM, 30-min increments)
+- Shows saved times outside hours with "(Outside hours)" indicator
+- Reverted hero card redesign back to original per user preference
+
+====================================
+KEY FILES MODIFIED
+====================================
+
+1. src/app/page.tsx
+   - Calendar widget integrated with work orders
+   - Day overlay modal with timeline view
+   - Scroll locking for calendar overlay
+   - Hero card (reverted to original design)
+
+2. src/app/work-orders/page.tsx
+   - Fixed timezone date display (+ 'T00:00:00' suffix)
+   - Integrated TireSelector component
+   - Scroll locking for work order modal
+   - Updated state from TireItem[] to SelectedTire[]
+   - Removed old tire functions (addTireToOrder, updateTireQuantity, etc.)
+
+3. src/components/DateTimePicker.tsx (NEW FILE - CREATED)
+   - Custom dark-themed date/time picker
+   - Business hours time generation (5 AM - 9 PM)
+   - Smart default time calculation
+   - Outside hours indicator for saved times
+   - Framer Motion animations
+   - No white popovers - fully themed
+
+4. src/components/TireSelector.tsx (NEW FILE - CREATED)
+   - Faceted filtering (width/aspect/rim/brand/in-stock)
+   - Auto-filters by customer tire size
+   - Shopping cart with inline quantity steppers
+   - Keyboard navigation support
+   - Quick preset buttons (2 or 4 tires)
+   - Real-time search and filtering
+   - Low stock badges (≤5 units)
+
+====================================
+TECH STACK
+====================================
+
+- Next.js 16 (App Router)
+- React with TypeScript
+- Supabase (database + real-time)
+- Framer Motion (animations)
+- Tailwind CSS (custom utilities + glass morphism)
+- Lucide React (icons)
+
+====================================
+DATABASE TABLES
+====================================
+
+- customers (id, name, phone, email, vehicle_make, vehicle_model, vehicle_year, tire_size)
+- work_orders (id, customer_id, service_type, status, scheduled_date, scheduled_time, total_cost, notes)
+- work_order_items (id, work_order_id, tire_id, quantity, unit_price, subtotal)
+- tires (id, brand, model, size, price, quantity)
+
+====================================
+IMPORTANT PATTERNS USED
+====================================
+
+1. Timezone-aware dates: Always use `new Date(dateString + 'T00:00:00')` for YYYY-MM-DD dates
+2. Scroll locking: Use document.body.style.overflow + onWheel/onTouchMove preventDefault
+3. Modal overlays: AnimatePresence + motion.div with backdrop-blur
+4. Component composition: Controlled components with props (selectedTires, onTiresChange)
+5. Optimistic UI: Update state immediately, rollback on error
+6. Keyboard navigation: addEventListener('keydown') with ArrowUp/ArrowDown/Enter
+7. Glass morphism: bg-white/60 dark:bg-gray-900/40 backdrop-blur-2xl
+
+====================================
+KNOWN WORKING FEATURES
+====================================
+
+✅ Dashboard with live stats (revenue, orders, customers, inventory)
+✅ Calendar widget showing all work orders (past/upcoming)
+✅ Day overlay modal with full timeline view
+✅ Quick Tasks section (4 action cards)
+✅ Work Orders page with create/edit/delete
+✅ Custom DateTimePicker (dark themed, 5 AM - 9 PM)
+✅ TireSelector with faceted filtering + cart
+✅ Customer management (CRUD operations)
+✅ Inventory management (low stock alerts)
+✅ Responsive design (mobile-first)
+✅ Dark mode support
+✅ Real-time updates via Supabase subscriptions
+✅ Scroll locking on modals
+
+====================================
+COMPONENTS CREATED
+====================================
+
+✅ Stepper.tsx (quantity increment/decrement)
+✅ Dropdown.tsx (custom styled select)
+✅ DateTimePicker.tsx (dark themed date/time picker)
+✅ TireSelector.tsx (faceted tire picker with cart)
+
+====================================
+NO PENDING ISSUES
+====================================
+
+All recent bugs have been fixed:
+- ✅ Background scrolling on modals - FIXED
+- ✅ Timezone date offset - FIXED
+- ✅ tireSearchQuery undefined error - FIXED
+- ✅ White popover on date picker - FIXED (custom component)
+
+====================================
+NEXT SESSION - WHAT TO DO
+====================================
+
+When you say "let's work on tire shop mvp again", I will respond with:
+
+"Welcome back! We just completed a major upgrade session. Here's where we are:
+
+✅ Calendar is now fully integrated with work orders
+✅ Custom dark-themed DateTimePicker created
+✅ Tire selector upgraded to faceted picker with cart
+✅ All scroll locking issues fixed
+✅ Timezone date display corrected
+
+The app is in great shape! What would you like to work on next?
+
+Some ideas:
+- Customer management enhancements
+- Inventory low-stock alerts/notifications
+- Work order search/filtering
+- Print invoices/receipts
+- Employee management
+- Service history tracking
+- Email/SMS notifications
+- Reporting/analytics dashboard
+- Payment processing integration
+- Or something else you have in mind?"
+
+====================================
+DEV SERVER
+====================================
+
+Multiple dev servers may be running. To restart:
+
+cd /d/Tire-Shop-MVP
+rm -rf .next
+npm run dev
+
+App runs on: http://localhost:3000
+
+====================================
+GIT STATUS
+====================================
+
+Not tracked (user hasn't requested git commits yet)
+
+====================================
+FILE STRUCTURE
+====================================
+
+D:\Tire-Shop-MVP\
+├── src\
+│   ├── app\
+│   │   ├── page.tsx (Dashboard)
+│   │   ├── work-orders\
+│   │   │   └── page.tsx (Work Orders Management)
+│   │   ├── customers\
+│   │   │   └── page.tsx (Customer Management)
+│   │   ├── inventory\
+│   │   │   └── page.tsx (Inventory Management)
+│   │   ├── globals.css (Global styles + utilities)
+│   │   └── layout.tsx (Root layout)
+│   ├── components\
+│   │   ├── Stepper.tsx (Quantity stepper)
+│   │   ├── Dropdown.tsx (Custom dropdown)
+│   │   ├── DateTimePicker.tsx (NEW - Dark themed date/time picker)
+│   │   └── TireSelector.tsx (NEW - Faceted tire picker with cart)
+│   └── lib\
+│       └── supabase.ts (Supabase client)
+├── supabase\
+│   └── migrations\ (Database migrations)
+├── package.json
+├── tailwind.config.ts
+└── tsconfig.json
+
+====================================
+END OF CONTEXT
+====================================
+
+This document contains everything needed to resume work on the Tire Shop MVP.
+All recent features are implemented and working.
+Ready for next development session.

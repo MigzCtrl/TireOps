@@ -16,6 +16,7 @@ interface DropdownProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  compact?: boolean;
 }
 
 export default function Dropdown({
@@ -24,6 +25,7 @@ export default function Dropdown({
   onChange,
   placeholder = 'Select an option',
   className = '',
+  compact = false,
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -70,7 +72,7 @@ export default function Dropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="dropdown-trigger"
+        className={compact ? 'dropdown-trigger-compact' : 'dropdown-trigger'}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
@@ -78,7 +80,7 @@ export default function Dropdown({
           {selectedOption?.label || placeholder}
         </span>
         <ChevronDown
-          size={20}
+          size={compact ? 16 : 20}
           className={`dropdown-chevron ${isOpen ? 'dropdown-chevron-open' : ''}`}
         />
       </button>
@@ -86,11 +88,11 @@ export default function Dropdown({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-            className="dropdown-menu"
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15 }}
+            className={compact ? 'dropdown-menu-compact' : 'dropdown-menu'}
             role="listbox"
           >
             {options.map((option) => (
@@ -98,7 +100,7 @@ export default function Dropdown({
                 key={option.value}
                 onClick={() => handleSelect(option.value)}
                 onKeyDown={(e) => handleKeyDown(e, option.value)}
-                className={`dropdown-item ${value === option.value ? 'dropdown-item-selected' : ''}`}
+                className={`${compact ? 'dropdown-item-compact' : 'dropdown-item'} ${value === option.value ? 'dropdown-item-selected' : ''}`}
                 role="option"
                 aria-selected={value === option.value}
                 tabIndex={0}
@@ -107,14 +109,14 @@ export default function Dropdown({
                   <div className="dropdown-item-label">
                     {option.label}
                   </div>
-                  {option.description && (
+                  {!compact && option.description && (
                     <div className="dropdown-item-description">
                       {option.description}
                     </div>
                   )}
                 </div>
                 {value === option.value && (
-                  <Check size={18} className="text-blue-500 dark:text-blue-400 flex-shrink-0" />
+                  <Check size={compact ? 14 : 18} className="text-blue-500 dark:text-blue-400 flex-shrink-0" />
                 )}
               </div>
             ))}

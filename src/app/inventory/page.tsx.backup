@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, Suspense, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState, Suspense } from 'react';
+import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Package, Plus, Search, Download, Trash2, Edit, Check, Loader2, X } from 'lucide-react';
+import { Package, Plus, Search, Download, Trash2, Edit, Check, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import Stepper from '@/components/Stepper';
@@ -40,9 +40,6 @@ export default function InventoryPage() {
     price: 0,
     description: '',
   });
-
-  const modalRef = useRef<HTMLDivElement>(null);
-
 
   const supabase = createClient();
 
@@ -90,29 +87,6 @@ export default function InventoryPage() {
     setFilteredInventory(filtered);
   }, [searchTerm, stockFilter, inventory]);
 
-  useEffect(() => {
-    if (showForm) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showForm]);
-
-
-  useEffect(() => {
-    if (showForm) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showForm]);
-
   async function loadInventory() {
     try {
       const { data, error } = await supabase
@@ -133,18 +107,10 @@ export default function InventoryPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      if (editingTireId) {
-        const { error } = await supabase
-          .from('inventory')
-          .update(formData)
-          .eq('id', editingTireId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('inventory').insert([formData]);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from('inventory').insert([formData]);
 
-      setEditingTireId(null);
+      if (error) throw error;
+
       setFormData({
         brand: '',
         model: '',
@@ -156,8 +122,8 @@ export default function InventoryPage() {
       setShowForm(false);
       loadInventory();
     } catch (error) {
-      console.error(`Error ${editingTireId ? 'updating' : 'adding'} tire:`, error);
-      alert(`Error ${editingTireId ? 'updating' : 'adding'} tire`);
+      console.error('Error adding tire:', error);
+      alert('Error adding tire');
     }
   }
 
@@ -213,12 +179,10 @@ export default function InventoryPage() {
       price: tire.price,
       description: tire.description || '',
     });
-    setShowForm(true);
   }
 
   function cancelEditingTire() {
     setEditingTireId(null);
-    setShowForm(false);
     setFormData({
       brand: '',
       model: '',
@@ -239,7 +203,6 @@ export default function InventoryPage() {
       if (error) throw error;
 
       setEditingTireId(null);
-      setShowForm(false);
       setFormData({
         brand: '',
         model: '',
@@ -422,191 +385,129 @@ export default function InventoryPage() {
           />
         </div>
 
-        {/* Form Modal */}
+        {/* Form */}
         {showForm && (
-          <AnimatePresence>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-              onClick={() => {
-                setShowForm(false);
-                setEditingTireId(null);
-              }}
-              aria-hidden="true"
-            />
-
-            <div
-              className="fixed inset-0 overflow-y-auto pointer-events-none z-50"
-              style={{ overscrollBehavior: 'contain' }}
-            >
-              <div className="min-h-full flex items-center justify-center p-6 pointer-events-none">
-                <div
-                  ref={modalRef}
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="modal-title"
-                  tabIndex={-1}
-                  className="pointer-events-auto w-[90vw] max-w-[1200px]"
-                  style={{ overflow: 'visible' }}
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setShowForm(false);
-                      setEditingTireId(null);
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg"
+            style={{ padding: '24px' }}
+          >
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Add New Tire</h2>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Brand *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.brand}
+                    onChange={(e) =>
+                      setFormData({ ...formData, brand: e.target.value })
                     }
-                  }}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-gray-50 dark:bg-gray-900 rounded-2xl shadow-2xl"
-                    style={{ maxHeight: '90vh', padding: '24px', overflow: 'visible' }}
-                  >
-                    {/* Header with X button */}
-                    <div className="flex items-center justify-between mb-6 pb-6 border-b border-gray-200 dark:border-gray-800">
-                      <h2 id="modal-title" className="text-2xl font-semibold text-gray-900 dark:text-white">
-                        {editingTireId ? 'Edit Tire' : 'Add New Tire'}
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowForm(false);
-                          setEditingTireId(null);
-                        }}
-                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                      >
-                        <X size={20} className="text-gray-500 dark:text-gray-400" />
-                      </button>
-                    </div>
-
-                    {/* Form with scrollable content */}
-                    <form onSubmit={handleSubmit} className="flex flex-col" style={{ maxHeight: 'calc(90vh - 180px)' }}>
-                      <div className="overflow-y-auto flex-1 pr-2 -mr-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Brand *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={formData.brand}
-                              onChange={(e) =>
-                                setFormData({ ...formData, brand: e.target.value })
-                              }
-                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Model *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={formData.model}
-                              onChange={(e) =>
-                                setFormData({ ...formData, model: e.target.value })
-                              }
-                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Size *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="e.g., 225/45R17"
-                              value={formData.size}
-                              onChange={(e) =>
-                                setFormData({ ...formData, size: e.target.value })
-                              }
-                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Quantity *
-                            </label>
-                            <Stepper
-                              value={formData.quantity}
-                              onChange={(value) => setFormData({ ...formData, quantity: value })}
-                              min={0}
-                              className="justify-start"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Price *
-                            </label>
-                            <input
-                              type="number"
-                              required
-                              min="0"
-                              step="0.01"
-                              value={formData.price}
-                              onChange={(e) =>
-                                setFormData({ ...formData, price: parseFloat(e.target.value) })
-                              }
-                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                          </div>
-                          <div className="col-span-1 sm:col-span-2">
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Description
-                            </label>
-                            <textarea
-                              value={formData.description}
-                              onChange={(e) =>
-                                setFormData({ ...formData, description: e.target.value })
-                              }
-                              className="w-full h-24 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                              rows={3}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Fixed Button Row at Bottom */}
-                      <div className="flex gap-3 justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-800">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowForm(false);
-                            setEditingTireId(null);
-                            setFormData({
-                              brand: '',
-                              model: '',
-                              size: '',
-                              quantity: 0,
-                              price: 0,
-                              description: '',
-                            });
-                          }}
-                          className="px-6 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-750 transition-all text-sm font-medium"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all text-sm font-medium shadow-sm hover:shadow-md"
-                        >
-                          {editingTireId ? 'Update Tire' : 'Add Tire'}
-                        </button>
-                      </div>
-                    </form>
-                  </motion.div>
+                    className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Model *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.model}
+                    onChange={(e) =>
+                      setFormData({ ...formData, model: e.target.value })
+                    }
+                    className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Size *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., 225/45R17"
+                    value={formData.size}
+                    onChange={(e) =>
+                      setFormData({ ...formData, size: e.target.value })
+                    }
+                    className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Quantity *
+                  </label>
+                  <Stepper
+                    value={formData.quantity}
+                    onChange={(value) => setFormData({ ...formData, quantity: value })}
+                    min={0}
+                    className="justify-start"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Price *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: parseFloat(e.target.value) })
+                    }
+                    className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="col-span-1 sm:col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData({ ...formData, description: e.target.value })
+                    }
+                    className="w-full h-24 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows={3}
+                  />
                 </div>
               </div>
-            </div>
-          </AnimatePresence>
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false);
+                    setFormData({
+                      brand: '',
+                      model: '',
+                      size: '',
+                      quantity: 0,
+                      price: 0,
+                      description: '',
+                    });
+                  }}
+                  className="sm:flex-1 h-11 px-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sm:flex-1 h-11 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm hover:shadow-md"
+                >
+                  Add Tire
+                </button>
+              </div>
+            </form>
+          </motion.div>
         )}
-
 
         {/* Tire List */}
         <div className="space-y-4">
@@ -627,6 +528,76 @@ export default function InventoryPage() {
                 transition={{ delay: index * 0.05 }}
                 className="card-glass p-4 lg:p-6 lift-hover"
               >
+                {editingTireId === tire.id ? (
+                  /* Edit Form */
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Edit Tire</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Brand</label>
+                        <input
+                          type="text"
+                          value={formData.brand}
+                          onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                          className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Model</label>
+                        <input
+                          type="text"
+                          value={formData.model}
+                          onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                          className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Size</label>
+                        <input
+                          type="text"
+                          value={formData.size}
+                          onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                          className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Price</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.price}
+                          onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                          className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="col-span-1 sm:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Description</label>
+                        <textarea
+                          value={formData.description}
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          className="w-full h-24 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                      <button
+                        onClick={cancelEditingTire}
+                        className="sm:flex-1 h-11 px-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => saveEditedTire(tire.id)}
+                        className="sm:flex-1 h-11 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm hover:shadow-md"
+                      >
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Regular View */
+                  <>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-4 sm:gap-0">
                       <div className="flex-1">
                         <h3 className="text-xl font-bold dark:text-white">
@@ -687,6 +658,8 @@ export default function InventoryPage() {
                     </button>
                   </div>
                 </div>
+                  </>
+                )}
               </motion.div>
             ))
           )}

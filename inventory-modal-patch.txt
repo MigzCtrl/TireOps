@@ -1,0 +1,18 @@
+This file contains the modifications needed for the Inventory page modal conversion.
+
+# Step 1: Add useEffect for body scroll lock (after line 88 - after the stockFilter useEffect)
+Add this useEffect:
+
+  useEffect(() => {
+    if (showForm) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showForm]);
+
+# Step 2: Replace the form section (lines 388-510) with modal structure
+The /* Form */ comment section needs to be replaced with the modal overlay structure.

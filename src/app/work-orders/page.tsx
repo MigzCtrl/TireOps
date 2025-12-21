@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import { ClipboardList, Plus, Calendar, Clock, Trash2, X, Edit } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
+import Dropdown from '@/components/Dropdown';
+import DateTimePicker from '@/components/DateTimePicker';
+import TireSelector, { type SelectedTire } from '@/components/TireSelector';
+import CustomSelect from '@/components/CustomSelect';
+import { createPortal } from 'react-dom';
 
 interface WorkOrder {
   id: string;
@@ -47,13 +52,15 @@ export default function WorkOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
-  const [selectedTires, setSelectedTires] = useState<TireItem[]>([]);
-  const [currentTireId, setCurrentTireId] = useState('');
-  const [currentTireQuantity, setCurrentTireQuantity] = useState(1);
-  const [tireSearchQuery, setTireSearchQuery] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedTires, setSelectedTires] = useState<SelectedTire[]>([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [customerTireSize, setCustomerTireSize] = useState<string>('');
+  const [mounted, setMounted] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const [stockError, setStockError] = useState<string>('');
   const [formData, setFormData] = useState({
     customer_id: '',
     service_type: '',
@@ -66,8 +73,41 @@ export default function WorkOrdersPage() {
   const supabase = createClient();
 
   useEffect(() => {
+    setMounted(true);
     loadData();
   }, []);
+
+  // Handle body scroll lock and focus management when modal opens/closes
+  useEffect(() => {
+    if (showForm) {
+      // Save the currently focused element
+      previousFocusRef.current = document.activeElement as HTMLElement;
+
+      // Lock body scroll
+      document.body.style.overflow = 'hidden';
+      document.body.style.paddingRight = '0px'; // Prevent layout shift from scrollbar
+
+      // Focus the modal after a brief delay to ensure it's rendered
+      setTimeout(() => {
+        modalRef.current?.focus();
+      }, 100);
+    } else {
+      // Restore body scroll
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+
+      // Restore focus to the previously focused element
+      if (previousFocusRef.current) {
+        previousFocusRef.current.focus();
+      }
+    }
+
+    return () => {
+      // Cleanup on unmount
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    };
+  }, [showForm]);
 
   async function loadData() {
     try {
@@ -102,75 +142,9 @@ export default function WorkOrdersPage() {
     }
   }
 
-  function addTireToOrder(tireId: string, quantity: number) {
-    const tire = tires.find(t => t.id === tireId);
-    if (!tire) return;
-
-    const existingItem = selectedTires.find(item => item.tire_id === tireId);
-    if (existingItem) {
-      alert('This tire is already added to the order');
-      return;
-    }
-
-    if (quantity > tire.quantity) {
-      alert(`Only ${tire.quantity} in stock`);
-      return;
-    }
-
-    const newItem: TireItem = {
-      tire_id: tireId,
-      quantity: quantity,
-      unit_price: tire.price,
-    };
-
-    setSelectedTires([...selectedTires, newItem]);
-    setCurrentTireId('');
-    setCurrentTireQuantity(1);
-    setTireSearchQuery('');
-  }
-
-  function updateTireQuantity(tireId: string, quantity: number) {
-    if (quantity < 1) return;
-
-    setSelectedTires(selectedTires.map(item =>
-      item.tire_id === tireId ? { ...item, quantity } : item
-    ));
-  }
-
-  function removeTireFromOrder(tireId: string) {
-    setSelectedTires(selectedTires.filter(item => item.tire_id !== tireId));
-  }
-
   function calculateTotal() {
-    return selectedTires.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    return selectedTires.reduce((sum, st) => sum + (st.quantity * st.tire.price), 0);
   }
-
-  const filteredTires = tires
-    .filter(tire => {
-      if (!tireSearchQuery.trim()) return true; // Show all if no search query
-
-      const query = tireSearchQuery.toLowerCase().trim();
-      const brand = tire.brand?.toLowerCase() || '';
-      const model = tire.model?.toLowerCase() || '';
-      const size = tire.size?.toLowerCase() || '';
-
-      return (
-        brand.includes(query) ||
-        model.includes(query) ||
-        size.includes(query) ||
-        // Also match if query matches any part of size (e.g., "205" matches "205/55R16")
-        size.replace(/\//g, ' ').includes(query)
-      );
-    })
-    .sort((a, b) => {
-      // If no search query, sort by quantity (most stock first) then alphabetically
-      if (!tireSearchQuery.trim()) {
-        if (b.quantity !== a.quantity) return b.quantity - a.quantity;
-        return a.brand.localeCompare(b.brand);
-      }
-      return 0;
-    })
-    .slice(0, tireSearchQuery.trim() ? undefined : 8); // Show top 8 when no search
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -212,12 +186,12 @@ export default function WorkOrdersPage() {
             .eq('work_order_id', editingOrderId);
 
           // Insert new items
-          const workOrderItems = selectedTires.map(item => ({
+          const workOrderItems = selectedTires.map(st => ({
             work_order_id: editingOrderId,
-            tire_id: item.tire_id,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            subtotal: item.quantity * item.unit_price,
+            tire_id: st.tire.id,
+            quantity: st.quantity,
+            unit_price: st.tire.price,
+            subtotal: st.quantity * st.tire.price,
           }));
 
           const { error: itemsError } = await supabase
@@ -252,12 +226,12 @@ export default function WorkOrdersPage() {
         }
 
         // Create work order items
-        const workOrderItems = selectedTires.map(item => ({
+        const workOrderItems = selectedTires.map(st => ({
           work_order_id: orderData.id,
-          tire_id: item.tire_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          subtotal: item.quantity * item.unit_price,
+          tire_id: st.tire.id,
+          quantity: st.quantity,
+          unit_price: st.tire.price,
+          subtotal: st.quantity * st.tire.price,
         }));
 
         const { error: itemsError} = await supabase
@@ -373,6 +347,25 @@ export default function WorkOrdersPage() {
     cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
   };
 
+  const statusOptions = [
+    { value: 'pending', label: 'Pending', description: 'Work order is waiting to be started' },
+    { value: 'in_progress', label: 'In Progress', description: 'Currently being worked on' },
+    { value: 'completed', label: 'Completed', description: 'Work order is finished' },
+    { value: 'cancelled', label: 'Cancelled', description: 'Work order was cancelled' },
+  ];
+
+  const handleFilterClick = (status: string | null) => {
+    if (statusFilter === status) {
+      setStatusFilter(null); // Toggle off if clicking the same filter
+    } else {
+      setStatusFilter(status);
+    }
+  };
+
+  const filteredWorkOrders = statusFilter
+    ? workOrders.filter((order) => order.status === statusFilter)
+    : workOrders;
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -395,16 +388,10 @@ export default function WorkOrdersPage() {
             </p>
           </div>
           <button
-            onClick={() => {
-              if (showForm) {
-                cancelEdit();
-              } else {
-                setShowForm(true);
-              }
-            }}
+            onClick={() => setShowForm(true)}
             className="flex items-center gap-2 px-6 py-3 btn-glass-primary btn-press w-full sm:w-auto justify-center"
           >
-            {showForm ? 'Cancel' : <><Plus size={20} /> New Work Order</>}
+            <Plus size={20} /> New Work Order
           </button>
         </div>
 
@@ -413,7 +400,10 @@ export default function WorkOrdersPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="stats-card p-4 lg:p-6"
+            onClick={() => handleFilterClick(null)}
+            className={`stats-card p-4 lg:p-6 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200 ${
+              statusFilter === null ? 'ring-4 ring-blue-400/50 shadow-[0_0_30px_rgba(59,130,246,0.5)]' : ''
+            }`}
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Orders</div>
@@ -425,7 +415,10 @@ export default function WorkOrdersPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="stats-card p-4 lg:p-6"
+            onClick={() => handleFilterClick('pending')}
+            className={`stats-card p-4 lg:p-6 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200 ${
+              statusFilter === 'pending' ? 'ring-4 ring-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.5)]' : ''
+            }`}
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Pending</div>
@@ -439,7 +432,10 @@ export default function WorkOrdersPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="stats-card p-4 lg:p-6"
+            onClick={() => handleFilterClick('in_progress')}
+            className={`stats-card p-4 lg:p-6 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200 ${
+              statusFilter === 'in_progress' ? 'ring-4 ring-blue-400/50 shadow-[0_0_30px_rgba(59,130,246,0.5)]' : ''
+            }`}
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">In Progress</div>
@@ -453,7 +449,10 @@ export default function WorkOrdersPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="stats-card p-4 lg:p-6"
+            onClick={() => handleFilterClick('completed')}
+            className={`stats-card p-4 lg:p-6 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200 ${
+              statusFilter === 'completed' ? 'ring-4 ring-green-400/50 shadow-[0_0_30px_rgba(34,197,94,0.5)]' : ''
+            }`}
           >
             <div className="flex flex-col items-center justify-center text-center space-y-2">
               <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Completed</div>
@@ -464,358 +463,204 @@ export default function WorkOrdersPage() {
           </motion.div>
         </div>
 
-        {/* Form */}
-        {showForm && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card-glass p-4 lg:p-6"
-          >
-            <h2 className="text-xl font-semibold dark:text-white mb-4">
-              {editingOrderId ? 'Edit Work Order' : 'Create Work Order'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                    Customer
-                  </label>
-                  <select
-                    value={formData.customer_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, customer_id: e.target.value })
-                    }
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all"
+        {/* Form Modal - Rendered in Portal */}
+        {mounted && showForm && createPortal(
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[9999] pointer-events-none"
+              style={{ isolation: 'isolate' }}
+            >
+              {/* Overlay Background */}
+              <div
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto"
+                onClick={cancelEdit}
+                aria-hidden="true"
+              />
+
+              {/* Modal Container */}
+              <div
+                className="absolute inset-0 overflow-y-auto pointer-events-none"
+                style={{ overscrollBehavior: 'contain' }}
+              >
+                <div className="min-h-full flex items-center justify-center p-6 pointer-events-none">
+                  <div
+                    ref={modalRef}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="modal-title"
+                    tabIndex={-1}
+                    className="pointer-events-auto w-[90vw] max-w-[1200px]"
+                    style={{ overflow: 'visible' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        cancelEdit();
+                      }
+                    }}
                   >
-                    <option value="">Select a customer</option>
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                    Service Type
-                  </label>
-                  <select
-                    value={formData.service_type}
-                    onChange={(e) =>
-                      setFormData({ ...formData, service_type: e.target.value })
-                    }
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all"
-                  >
-                    <option value="">Select service</option>
-                    <option value="Tire Installation">Tire Installation</option>
-                    <option value="Tire Rotation">Tire Rotation</option>
-                    <option value="Tire Repair">Tire Repair</option>
-                    <option value="Wheel Alignment">Wheel Alignment</option>
-                    <option value="Tire Balance">Tire Balance</option>
-                  </select>
-                </div>
-                <div className="col-span-1 sm:col-span-2">
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-2">
-                    Select Tires *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Search and select tire (brand, model, or size)..."
-                      value={tireSearchQuery}
-                      onChange={(e) => {
-                        setTireSearchQuery(e.target.value);
-                        setShowDropdown(true);
-                        setCurrentTireId('');
-                      }}
-                      onFocus={() => {
-                        setShowDropdown(true);
-                        if (!tireSearchQuery) {
-                          setTireSearchQuery(' '); // Trigger to show top tires
-                          setTimeout(() => setTireSearchQuery(''), 0);
-                        }
-                      }}
-                      onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                      className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                    />
-                    {showDropdown && (filteredTires.length > 0 || !tireSearchQuery) && (
-                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        {filteredTires.length > 0 ? (
-                          filteredTires.map((tire) => (
-                            <div
-                              key={tire.id}
-                              onClick={() => {
-                                setCurrentTireId(tire.id);
-                                setTireSearchQuery(`${tire.brand} ${tire.model} (${tire.size})`);
-                                setShowDropdown(false);
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-50 dark:bg-gray-900 rounded-2xl shadow-2xl"
+              style={{ maxHeight: '90vh', padding: '24px', overflow: 'visible' }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pb-6 border-b border-gray-200 dark:border-gray-800">
+                <h2 id="modal-title" className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {editingOrderId ? 'Edit Work Order' : 'New Work Order'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-gray-500 dark:text-gray-400" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="flex flex-col" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+                {/* Scrollable Content Area */}
+                <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                  {/* Two Column Grid Layout */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    {/* Left Column */}
+                    <div className="space-y-6">
+                      {/* Basic Info Section */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-4">Basic Information</h3>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                              Customer
+                            </label>
+                            <CustomSelect
+                              value={customers.find(c => c.id === formData.customer_id)?.name || ''}
+                              onChange={(name) => {
+                                const customer = customers.find(c => c.name === name);
+                                if (customer) {
+                                  setFormData({ ...formData, customer_id: customer.id });
+                                }
                               }}
-                              className="px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0 transition-colors"
-                            >
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <div className="font-medium dark:text-white">
-                                    {tire.brand} {tire.model}
-                                  </div>
-                                  <div className="text-sm stat-label text-gray-600 dark:text-gray-400">
-                                    Size: {tire.size}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="font-semibold text-blue-600 dark:text-blue-400">
-                                    ${tire.price.toFixed(2)}
-                                  </div>
-                                  <div className="text-sm stat-label text-gray-600 dark:text-gray-400">
-                                    Stock: {tire.quantity}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="px-4 py-3 text-gray-500 dark:text-gray-400 text-center">
-                            No tires found
+                              options={customers.map(c => c.name)}
+                              placeholder="Select a customer"
+                              searchable={true}
+                            />
                           </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Selected tire with quantity selector */}
-                    {currentTireId && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
-                      >
-                        {(() => {
-                          const selectedTire = tires.find(t => t.id === currentTireId);
-                          if (!selectedTire) return null;
-                          return (
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex-1">
-                                <div className="font-medium dark:text-white">
-                                  {selectedTire.brand} {selectedTire.model}
-                                </div>
-                                <div className="text-sm stat-label text-gray-600 dark:text-gray-400">
-                                  {selectedTire.size} • ${selectedTire.price.toFixed(2)} each
-                                </div>
-                              </div>
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                                <div className="flex items-center gap-2">
-                                  <label className="text-sm font-medium dark:text-white">Qty:</label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max={selectedTire.quantity}
-                                    value={currentTireQuantity}
-                                    onChange={(e) => setCurrentTireQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                                    className="w-20 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white text-center focus:ring-2 focus:ring-blue-500"
-                                  />
-                                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                                    / {selectedTire.quantity}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => addTireToOrder(currentTireId, currentTireQuantity)}
-                                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 justify-center"
-                                >
-                                  <Plus size={18} />
-                                  Add
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </motion.div>
-                    )}
-                  </div>
-
-                  {/* Display selected tires */}
-                  {selectedTires.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      {selectedTires.map((item) => {
-                        const tire = tires.find(t => t.id === item.tire_id);
-                        if (!tire) return null;
-                        return (
-                          <div
-                            key={item.tire_id}
-                            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                          >
-                            <div className="flex-1">
-                              <div className="font-medium dark:text-white">
-                                {tire.brand} {tire.model} ({tire.size})
-                              </div>
-                              <div className="text-sm stat-label text-gray-600 dark:text-gray-400">
-                                ${item.unit_price.toFixed(2)} each
-                              </div>
-                            </div>
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                              <div className="flex items-center gap-2">
-                                <label className="text-sm text-gray-600 dark:text-gray-400">Qty:</label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max={tire.quantity}
-                                  value={item.quantity}
-                                  onChange={(e) => updateTireQuantity(item.tire_id, parseInt(e.target.value))}
-                                  className="w-20 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-600 dark:text-white text-center"
-                                />
-                              </div>
-                              <div className="text-right min-w-[80px]">
-                                <div className="font-semibold text-blue-600 dark:text-blue-400">
-                                  ${(item.quantity * item.unit_price).toFixed(2)}
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => removeTireFromOrder(item.tire_id)}
-                                className="p-1.5 sm:p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                                title="Remove"
-                              >
-                                <X size={18} />
-                              </button>
-                            </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                              Service Type
+                            </label>
+                            <CustomSelect
+                              value={formData.service_type}
+                              onChange={(value) => setFormData({ ...formData, service_type: value })}
+                              options={['Tire Installation', 'Tire Rotation', 'Tire Repair', 'Wheel Alignment', 'Tire Balance']}
+                              placeholder="Select service"
+                              searchable={true}
+                            />
                           </div>
-                        );
-                      })}
-                      <div className="flex justify-between items-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-200 dark:border-blue-800">
-                        <div className="font-semibold text-lg dark:text-white">Total Amount:</div>
-                        <div className="font-bold text-2xl text-blue-600 dark:text-blue-400">
-                          ${calculateTotal().toFixed(2)}
                         </div>
                       </div>
+
+                      {/* Schedule Section */}
+                      <div>
+                        <DateTimePicker
+                          date={formData.scheduled_date}
+                          time={formData.scheduled_time}
+                          onDateChange={(date) => setFormData({ ...formData, scheduled_date: date })}
+                          onTimeChange={(time) => setFormData({ ...formData, scheduled_time: time })}
+                          label="Schedule Appointment"
+                        />
+                      </div>
+
+                      {/* Notes Section */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Additional Notes</label>
+                        <textarea
+                          value={formData.notes}
+                          onChange={(e) =>
+                            setFormData({ ...formData, notes: e.target.value })
+                          }
+                          placeholder="Add any special instructions or notes..."
+                          className="w-full h-24 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow resize-none"
+                          rows={3}
+                        />
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-2">
-                    Scheduled Date
-                  </label>
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, scheduled_date: new Date().toISOString().split('T')[0] })}
-                      className="px-3 py-1.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                    >
-                      Today
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        setFormData({ ...formData, scheduled_date: tomorrow.toISOString().split('T')[0] });
-                      }}
-                      className="px-3 py-1.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                    >
-                      Tomorrow
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextWeek = new Date();
-                        nextWeek.setDate(nextWeek.getDate() + 7);
-                        setFormData({ ...formData, scheduled_date: nextWeek.toISOString().split('T')[0] });
-                      }}
-                      className="px-3 py-1.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                    >
-                      Next Week
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="date"
-                      value={formData.scheduled_date}
-                      onChange={(e) =>
-                        setFormData({ ...formData, scheduled_date: e.target.value })
-                      }
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all"
-                    />
+                    {/* Right Column - Tire Selection */}
+                    <div>
+                      {/* Stock Error Message */}
+                      <AnimatePresence>
+                        {stockError && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50"
+                          >
+                            <p className="text-sm font-medium text-red-700 dark:text-red-400">{stockError}</p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <TireSelector
+                        tires={tires}
+                        selectedTires={selectedTires}
+                        onTiresChange={setSelectedTires}
+                        customerTireSize={customerTireSize}
+                        onStockError={(message) => {
+                          setStockError(message);
+                          setTimeout(() => setStockError(''), 5000); // Clear after 5 seconds
+                        }}
+                      />
+                    </div>
+
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-2">
-                    Scheduled Time
-                  </label>
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, scheduled_time: '09:00' })}
-                      className="px-3 py-1.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                    >
-                      9 AM
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, scheduled_time: '12:00' })}
-                      className="px-3 py-1.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                    >
-                      12 PM
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, scheduled_time: '15:00' })}
-                      className="px-3 py-1.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                    >
-                      3 PM
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, scheduled_time: '17:00' })}
-                      className="px-3 py-1.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                    >
-                      5 PM
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="time"
-                      value={formData.scheduled_time}
-                      onChange={(e) =>
-                        setFormData({ ...formData, scheduled_time: e.target.value })
-                      }
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 transition-all"
-                    />
-                  </div>
-                </div>
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="sm:flex-1 h-11 px-4 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="sm:flex-1 h-11 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm hover:shadow-md"
+                >
+                  {editingOrderId ? 'Update Work Order' : 'Create Work Order'}
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Notes</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
-                  }
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  rows={3}
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full btn-glass-primary py-3 btn-press"
-              >
-                {editingOrderId ? 'Update Work Order' : 'Create Work Order'}
-              </button>
             </form>
-          </motion.div>
+            </motion.div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>,
+          document.body
         )}
 
         {/* Work Orders List */}
         <div className="space-y-4">
-          {workOrders.length === 0 ? (
+          {filteredWorkOrders.length === 0 ? (
             <div className="card-glass p-8 text-center">
               <p className="text-gray-500 dark:text-gray-400">
-                No work orders yet. Click "New Work Order" to get started.
+                {workOrders.length === 0
+                  ? 'No work orders yet. Click "New Work Order" to get started.'
+                  : `No ${statusFilter ? statusFilter.replace('_', ' ') : ''} work orders found.`}
               </p>
             </div>
           ) : (
-            workOrders.map((order, index) => (
+            filteredWorkOrders.map((order, index) => (
               <motion.div
                 key={order.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -832,18 +677,15 @@ export default function WorkOrdersPage() {
                       {order.service_type}
                     </p>
                   </div>
-                  <select
-                    value={order.status}
-                    onChange={(e) => updateStatus(order.id, e.target.value)}
-                    className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      statusColors[order.status as keyof typeof statusColors]
-                    }`}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
+                  <div className="w-full sm:w-auto sm:min-w-[180px]">
+                    <Dropdown
+                      options={statusOptions}
+                      value={order.status}
+                      onChange={(newStatus) => updateStatus(order.id, newStatus)}
+                      className="w-full"
+                      compact
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4">
                   <div>
@@ -853,7 +695,7 @@ export default function WorkOrdersPage() {
                   <div>
                     <span className="text-gray-600 dark:text-gray-400">Scheduled:</span>
                     <p className="font-medium dark:text-white">
-                      {new Date(order.scheduled_date).toLocaleDateString()}
+                      {new Date(order.scheduled_date + 'T00:00:00').toLocaleDateString()}
                       {order.scheduled_time && ` at ${order.scheduled_time}`}
                     </p>
                   </div>

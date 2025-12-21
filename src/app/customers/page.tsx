@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useState, Suspense, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Users, Plus, Search, Edit, Eye, Trash2 } from 'lucide-react';
+import { Users, Plus, Search, Edit, Eye, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -32,6 +32,8 @@ export default function CustomersPage() {
     address: '',
   });
 
+  const modalRef = useRef<HTMLDivElement>(null);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -59,6 +61,17 @@ export default function CustomersPage() {
       setFilteredCustomers(customers);
     }
   }, [searchTerm, customers]);
+
+  useEffect(() => {
+    if (showForm) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showForm]);
 
   async function loadCustomers() {
     try {
@@ -163,74 +176,136 @@ export default function CustomersPage() {
           />
         </div>
 
-        {/* Form */}
+        {/* Form Modal */}
         {showForm && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card-glass p-6"
-          >
-            <h2 className="text-xl font-semibold dark:text-white mb-4">
-              {editingId ? 'Edit Customer' : 'Add New Customer'}
-            </h2>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                  Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                  Phone *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                  Address
-                </label>
-                <input
-                  type="text"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="col-span-1 sm:col-span-2">
-                <button
-                  type="submit"
-                  className="w-full btn-glass-primary py-3 btn-press"
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              onClick={() => setShowForm(false)}
+              aria-hidden="true"
+            />
+
+            <div
+              className="fixed inset-0 overflow-y-auto pointer-events-none z-50"
+              style={{ overscrollBehavior: 'contain' }}
+            >
+              <div className="min-h-full flex items-center justify-center p-6 pointer-events-none">
+                <div
+                  ref={modalRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="modal-title"
+                  tabIndex={-1}
+                  className="pointer-events-auto w-[90vw] max-w-[1200px]"
+                  style={{ overflow: 'visible' }}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setShowForm(false);
+                    }
+                  }}
                 >
-                  {editingId ? 'Update Customer' : 'Add Customer'}
-                </button>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="bg-gray-50 dark:bg-gray-900 rounded-2xl shadow-2xl"
+                    style={{ maxHeight: '90vh', padding: '24px', overflow: 'visible' }}
+                  >
+                    {/* Header with X button */}
+                    <div className="flex items-center justify-between mb-6 pb-6 border-b border-gray-200 dark:border-gray-800">
+                      <h2 id="modal-title" className="text-2xl font-semibold text-gray-900 dark:text-white">
+                        {editingId ? 'Edit Customer' : 'Add New Customer'}
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => setShowForm(false)}
+                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                      >
+                        <X size={20} className="text-gray-500 dark:text-gray-400" />
+                      </button>
+                    </div>
+
+                    {/* Form with scrollable content */}
+                    <form onSubmit={handleSubmit} className="flex flex-col" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+                      <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                              Name *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={formData.name}
+                              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                              Phone *
+                            </label>
+                            <input
+                              type="tel"
+                              required
+                              value={formData.phone}
+                              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                              Email
+                            </label>
+                            <input
+                              type="email"
+                              value={formData.email}
+                              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                              Address
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.address}
+                              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fixed Button Row at Bottom */}
+                      <div className="flex gap-3 justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-800">
+                        <button
+                          type="button"
+                          onClick={() => setShowForm(false)}
+                          className="px-6 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-750 transition-all text-sm font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all text-sm font-medium shadow-sm hover:shadow-md"
+                        >
+                          {editingId ? 'Update Customer' : 'Add Customer'}
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                </div>
               </div>
-            </form>
-          </motion.div>
+            </div>
+          </AnimatePresence>
         )}
+
 
         {/* Table */}
         <div className="card-glass overflow-hidden">
