@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import { Package, Plus, Search, Download, Trash2, Edit, Check, Loader2, X } from 'lucide-react';
@@ -423,13 +424,14 @@ export default function InventoryPage() {
         </div>
 
         {/* Form Modal */}
-        {showForm && (
+        {showForm && typeof window !== 'undefined' && createPortal(
           <AnimatePresence>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              className="fixed inset-0 bg-black/75 backdrop-blur-md z-[9999]"
+              style={{ width: '100vw', height: '100vh' }}
               onClick={() => {
                 setShowForm(false);
                 setEditingTireId(null);
@@ -438,8 +440,8 @@ export default function InventoryPage() {
             />
 
             <div
-              className="fixed inset-0 overflow-y-auto pointer-events-none z-50"
-              style={{ overscrollBehavior: 'contain' }}
+              className="fixed inset-0 overflow-y-auto pointer-events-none z-[10000]"
+              style={{ overscrollBehavior: 'contain', width: '100vw', height: '100vh' }}
             >
               <div className="min-h-full flex items-center justify-center p-6 pointer-events-none">
                 <div
@@ -462,11 +464,11 @@ export default function InventoryPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-gray-50 dark:bg-gray-900 rounded-2xl shadow-2xl"
-                    style={{ maxHeight: '90vh', padding: '24px', overflow: 'visible' }}
+                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden"
+                    style={{ maxHeight: '90vh' }}
                   >
-                    {/* Header with X button */}
-                    <div className="flex items-center justify-between mb-6 pb-6 border-b border-gray-200 dark:border-gray-800">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-6 py-5 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
                       <h2 id="modal-title" className="text-2xl font-semibold text-gray-900 dark:text-white">
                         {editingTireId ? 'Edit Tire' : 'Add New Tire'}
                       </h2>
@@ -476,15 +478,15 @@ export default function InventoryPage() {
                           setShowForm(false);
                           setEditingTireId(null);
                         }}
-                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
                       >
                         <X size={20} className="text-gray-500 dark:text-gray-400" />
                       </button>
                     </div>
 
                     {/* Form with scrollable content */}
-                    <form onSubmit={handleSubmit} className="flex flex-col" style={{ maxHeight: 'calc(90vh - 180px)' }}>
-                      <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                    <form onSubmit={handleSubmit} className="flex flex-col p-6" style={{ maxHeight: 'calc(90vh - 100px)' }}>
+                      <div className="overflow-y-auto flex-1 space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
@@ -497,7 +499,7 @@ export default function InventoryPage() {
                               onChange={(e) =>
                                 setFormData({ ...formData, brand: e.target.value })
                               }
-                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                           </div>
                           <div>
@@ -511,7 +513,7 @@ export default function InventoryPage() {
                               onChange={(e) =>
                                 setFormData({ ...formData, model: e.target.value })
                               }
-                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                           </div>
                           <div>
@@ -526,7 +528,7 @@ export default function InventoryPage() {
                               onChange={(e) =>
                                 setFormData({ ...formData, size: e.target.value })
                               }
-                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                           </div>
                           <div>
@@ -553,7 +555,7 @@ export default function InventoryPage() {
                               onChange={(e) =>
                                 setFormData({ ...formData, price: parseFloat(e.target.value) })
                               }
-                              className="w-full h-11 px-3 rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                           </div>
                           <div className="col-span-1 sm:col-span-2">
@@ -573,7 +575,7 @@ export default function InventoryPage() {
                       </div>
 
                       {/* Fixed Button Row at Bottom */}
-                      <div className="flex gap-3 justify-end mt-6 pt-6 border-t border-gray-200 dark:border-gray-800">
+                      <div className="flex gap-3 justify-end pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
                         <button
                           type="button"
                           onClick={() => {
@@ -604,7 +606,8 @@ export default function InventoryPage() {
                 </div>
               </div>
             </div>
-          </AnimatePresence>
+          </AnimatePresence>,
+          document.body
         )}
 
 

@@ -472,19 +472,20 @@ export default function WorkOrdersPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="fixed inset-0 z-[9999] pointer-events-none"
-              style={{ isolation: 'isolate' }}
+              style={{ isolation: 'isolate', width: '100vw', height: '100vh' }}
             >
               {/* Overlay Background */}
               <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto"
+                className="absolute inset-0 bg-black/75 backdrop-blur-md pointer-events-auto"
+                style={{ width: '100vw', height: '100vh' }}
                 onClick={cancelEdit}
                 aria-hidden="true"
               />
 
               {/* Modal Container */}
               <div
-                className="absolute inset-0 overflow-y-auto pointer-events-none"
-                style={{ overscrollBehavior: 'contain' }}
+                className="absolute inset-0 overflow-y-auto pointer-events-none z-[10000]"
+                style={{ overscrollBehavior: 'contain', width: '100vw', height: '100vh' }}
               >
                 <div className="min-h-full flex items-center justify-center p-6 pointer-events-none">
                   <div
@@ -505,26 +506,26 @@ export default function WorkOrdersPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-gray-50 dark:bg-gray-900 rounded-2xl shadow-2xl"
-              style={{ maxHeight: '90vh', padding: '24px', overflow: 'visible' }}
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden"
+              style={{ maxHeight: '90vh' }}
             >
               {/* Header */}
-              <div className="flex items-center justify-between mb-6 pb-6 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between px-6 py-5 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
                 <h2 id="modal-title" className="text-2xl font-semibold text-gray-900 dark:text-white">
                   {editingOrderId ? 'Edit Work Order' : 'New Work Order'}
                 </h2>
                 <button
                   type="button"
                   onClick={cancelEdit}
-                  className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <X size={20} className="text-gray-500 dark:text-gray-400" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="flex flex-col" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+              <form onSubmit={handleSubmit} className="flex flex-col p-6" style={{ maxHeight: 'calc(90vh - 100px)' }}>
                 {/* Scrollable Content Area */}
-                <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                <div className="overflow-y-auto flex-1 space-y-6">
                   {/* Two Column Grid Layout */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -624,7 +625,7 @@ export default function WorkOrdersPage() {
                 </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+              <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
                 <button
                   type="button"
                   onClick={cancelEdit}

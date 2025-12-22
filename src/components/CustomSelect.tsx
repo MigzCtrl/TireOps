@@ -151,7 +151,7 @@ export default function CustomSelect({
       )}
 
       {/* Options List */}
-      <div className="max-h-64 overflow-y-auto">
+      <div className="max-h-64 overflow-y-auto p-1">
         {filteredOptions.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-gray-500 dark:text-gray-400">
             No options found
@@ -168,10 +168,12 @@ export default function CustomSelect({
                 triggerRef.current?.focus();
               }}
               onMouseEnter={() => setHighlightedIndex(index)}
-              className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors ${
+              className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors rounded-md ${
                 index === highlightedIndex
                   ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              } ${
+                index !== filteredOptions.length - 1 ? 'mb-1' : ''
               }`}
             >
               <span>{option}</span>
