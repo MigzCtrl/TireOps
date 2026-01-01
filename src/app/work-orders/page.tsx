@@ -314,6 +314,15 @@ export default function WorkOrdersPage() {
     if (!profile?.shop_id) return;
 
     try {
+      // Get current order status before updating
+      const { data: currentOrder } = await supabase
+        .from('work_orders')
+        .select('status')
+        .eq('id', id)
+        .eq('shop_id', profile.shop_id)
+        .single();
+
+      // Update work order status
       const { error } = await supabase
         .from('work_orders')
         .update({ status: newStatus })
@@ -322,9 +331,54 @@ export default function WorkOrdersPage() {
 
       if (error) throw error;
 
+      // If order is being marked as completed, deduct inventory
+      if (newStatus === 'completed' && currentOrder?.status !== 'completed') {
+        // Fetch work order items
+        const { data: workOrderItems, error: itemsError } = await supabase
+          .from('work_order_items')
+          .select('tire_id, quantity')
+          .eq('work_order_id', id);
+
+        if (itemsError) {
+          console.error('Error fetching work order items:', itemsError);
+        } else if (workOrderItems && workOrderItems.length > 0) {
+          // Deduct inventory for each tire
+          for (const item of workOrderItems) {
+            // Get current inventory quantity
+            const { data: inventoryItem, error: inventoryError } = await supabase
+              .from('inventory')
+              .select('quantity')
+              .eq('id', item.tire_id)
+              .eq('shop_id', profile.shop_id)
+              .single();
+
+            if (inventoryError) {
+              console.error('Error fetching inventory:', inventoryError);
+              continue;
+            }
+
+            // Calculate new quantity (prevent negative)
+            const newQuantity = Math.max(0, (inventoryItem?.quantity || 0) - item.quantity);
+
+            // Update inventory
+            const { error: updateError } = await supabase
+              .from('inventory')
+              .update({ quantity: newQuantity })
+              .eq('id', item.tire_id)
+              .eq('shop_id', profile.shop_id);
+
+            if (updateError) {
+              console.error('Error updating inventory:', updateError);
+            }
+          }
+        }
+      }
+
       toast({
         title: "Success!",
-        description: "Status updated successfully",
+        description: newStatus === 'completed'
+          ? "Order completed and inventory updated"
+          : "Status updated successfully",
       });
       loadData();
     } catch (error) {

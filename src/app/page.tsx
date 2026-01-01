@@ -32,7 +32,6 @@ export default function DashboardPage() {
   const [taskFilter, setTaskFilter] = useState<'active' | 'completed'>('active');
   const [newTaskInput, setNewTaskInput] = useState('');
   const [showTaskFeedback, setShowTaskFeedback] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -62,11 +61,7 @@ export default function DashboardPage() {
   }, [profile?.shop_id]);
 
   useEffect(() => {
-    loadUser();
-  }, []);
-
-  useEffect(() => {
-    if (!userId) return;
+    if (!profile?.shop_id) return;
 
     loadTasks();
 
@@ -79,7 +74,7 @@ export default function DashboardPage() {
           event: '*',  // Listen to all events (INSERT, UPDATE, DELETE)
           schema: 'public',
           table: 'tasks',
-          filter: `user_id=eq.${userId}`,
+          filter: `shop_id=eq.${profile.shop_id}`,
         },
         (payload) => {
           // Optimistic update based on event type
@@ -98,26 +93,16 @@ export default function DashboardPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
-
-  async function loadUser() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
-    } catch (error) {
-      console.error('Error loading user:', error);
-      setUserId(null);
-    }
-  }
+  }, [profile?.shop_id]);
 
   async function loadTasks() {
-    if (!userId) return;
+    if (!profile?.shop_id) return;
 
     try {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('user_id', userId)
+        .eq('shop_id', profile.shop_id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -266,14 +251,18 @@ export default function DashboardPage() {
   };
 
   const addTask = async () => {
-    if (!newTaskInput.trim() || !userId) return;
+    if (!newTaskInput.trim() || !profile?.shop_id) return;
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { error } = await supabase
         .from('tasks')
         .insert([
           {
-            user_id: userId,
+            shop_id: profile.shop_id,
+            user_id: user.id,
             title: newTaskInput.trim(),
             completed: false,
           },

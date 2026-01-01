@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { formatTime } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Customer {
   id: string;
@@ -38,6 +39,7 @@ export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { profile, loading: authLoading } = useAuth();
   const customerId = params.id as string;
 
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -51,27 +53,31 @@ export default function CustomerDetailPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    if (customerId) {
+    if (customerId && profile?.shop_id) {
       loadCustomerData();
     }
-  }, [customerId]);
+  }, [customerId, profile?.shop_id]);
 
   async function loadCustomerData() {
+    if (!profile?.shop_id) return;
+
     try {
-      // Load customer info
+      // Load customer info - with shop_id verification
       const { data: customerData, error: customerError } = await supabase
         .from('customers')
         .select('*')
         .eq('id', customerId)
+        .eq('shop_id', profile.shop_id)
         .single();
 
       if (customerError) throw customerError;
 
-      // Load work orders
+      // Load work orders - with shop_id verification
       const { data: ordersData, error: ordersError } = await supabase
         .from('work_orders')
         .select('*, inventory(brand, model, size)')
         .eq('customer_id', customerId)
+        .eq('shop_id', profile.shop_id)
         .order('scheduled_date', { ascending: false });
 
       if (ordersError) throw ordersError;
@@ -136,7 +142,7 @@ export default function CustomerDetailPage() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editedCustomer) return;
+    if (!editedCustomer || !profile?.shop_id) return;
 
     try {
       const { error } = await supabase
@@ -147,7 +153,8 @@ export default function CustomerDetailPage() {
           phone: editedCustomer.phone,
           address: editedCustomer.address,
         })
-        .eq('id', customerId);
+        .eq('id', customerId)
+        .eq('shop_id', profile.shop_id);
 
       if (error) throw error;
 
@@ -168,11 +175,14 @@ export default function CustomerDetailPage() {
   };
 
   const handleDeleteCustomer = async () => {
+    if (!profile?.shop_id) return;
+
     try {
       const { error } = await supabase
         .from('customers')
         .delete()
-        .eq('id', customerId);
+        .eq('id', customerId)
+        .eq('shop_id', profile.shop_id);
 
       if (error) throw error;
 

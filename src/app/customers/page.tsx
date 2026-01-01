@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { customerSchema, sanitizeInput } from '@/lib/validations/schemas';
 
 interface Customer {
   id: string;
@@ -111,10 +112,32 @@ export default function CustomersPage() {
     if (!profile?.shop_id) return;
 
     try {
+      // Sanitize inputs to prevent XSS
+      const sanitizedData = {
+        name: sanitizeInput(formData.name),
+        email: sanitizeInput(formData.email),
+        phone: sanitizeInput(formData.phone),
+        address: sanitizeInput(formData.address),
+      };
+
+      // Validate with Zod schema
+      const validationResult = customerSchema.safeParse(sanitizedData);
+
+      if (!validationResult.success) {
+        // Show first validation error
+        const firstError = validationResult.error.errors[0];
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: firstError.message,
+        });
+        return;
+      }
+
       if (editingId) {
         const { error } = await supabase
           .from('customers')
-          .update(formData)
+          .update(validationResult.data)
           .eq('id', editingId)
           .eq('shop_id', profile.shop_id);
         if (error) throw error;
@@ -125,7 +148,7 @@ export default function CustomersPage() {
         });
       } else {
         const customerData = {
-          ...formData,
+          ...validationResult.data,
           shop_id: profile.shop_id,
         };
         const { error } = await supabase.from('customers').insert([customerData]);
