@@ -60,13 +60,6 @@ export default function CustomersPage() {
     loadData();
   }, [profile?.shop_id]);
 
-  useEffect(() => {
-    const urlSearch = searchParams.get('search');
-    if (urlSearch) {
-      setSearchTerm(urlSearch);
-    }
-  }, [searchParams]);
-
   async function loadData() {
     if (!profile?.shop_id) return;
 
