@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import { Users, Plus, Search, Edit, Eye, Trash2, UserPlus, Calendar, ShoppingBag, ArrowUp, ArrowDown } from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +34,6 @@ type SortDirection = 'asc' | 'desc';
 
 export default function CustomersPage() {
   const { profile, canEdit, canDelete, loading: authLoading } = useAuth();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import { ClipboardList, Plus, Calendar, Clock, Trash2, Edit, Search, Eye, ArrowUp, ArrowDown, CheckCircle2, AlertCircle, Loader2, XCircle } from 'lucide-react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import DateTimePicker from '@/components/DateTimePicker';
@@ -51,7 +51,6 @@ type SortDirection = 'asc' | 'desc';
 
 export default function WorkOrdersPage() {
   const { profile, canEdit, canDelete, loading: authLoading } = useAuth();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
