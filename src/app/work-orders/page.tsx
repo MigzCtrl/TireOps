@@ -85,13 +85,6 @@ export default function WorkOrdersPage() {
     loadData();
   }, [profile?.shop_id]);
 
-  useEffect(() => {
-    const urlStatus = searchParams.get('status');
-    if (urlStatus && ['pending', 'in_progress', 'completed', 'cancelled'].includes(urlStatus)) {
-      setStatusFilter(urlStatus);
-    }
-  }, [searchParams]);
-
   async function loadData() {
     if (!profile?.shop_id) return;
 
