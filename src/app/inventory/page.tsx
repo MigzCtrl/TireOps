@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
@@ -10,7 +8,6 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
   Minus, History
 } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,7 +33,6 @@ type SortDirection = 'asc' | 'desc';
 
 export default function InventoryPage() {
   const { profile, isOwner, loading: authLoading } = useAuth();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [inventory, setInventory] = useState<Tire[]>([]);
   const [filteredInventory, setFilteredInventory] = useState<Tire[]>([]);
@@ -68,20 +64,6 @@ export default function InventoryPage() {
     if (!profile?.shop_id) return;
     loadInventory();
   }, [profile?.shop_id]);
-
-  useEffect(() => {
-    const urlSearch = searchParams.get('search');
-    if (urlSearch) {
-      setSearchTerm(urlSearch);
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    const urlStockFilter = searchParams.get('stock');
-    if (urlStockFilter && ['all', 'in-stock', 'low-stock', 'out-of-stock'].includes(urlStockFilter)) {
-      setStockFilter(urlStockFilter);
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     let filtered = inventory;
