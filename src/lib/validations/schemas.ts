@@ -64,9 +64,9 @@ export const inventorySchema = z.object({
     .min(0, 'Price cannot be negative')
     .max(100000, 'Price must be less than $100,000')
     .multipleOf(0.01, 'Price must have at most 2 decimal places'),
-  sku: z
+  description: z
     .string()
-    .max(50, 'SKU must be less than 50 characters')
+    .max(500, 'Description must be less than 500 characters')
     .trim()
     .optional()
     .or(z.literal('')),

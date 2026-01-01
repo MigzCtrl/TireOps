@@ -78,9 +78,6 @@ CREATE INDEX IF NOT EXISTS idx_inventory_size ON public.inventory(size);
 -- Index on quantity for low stock alerts
 CREATE INDEX IF NOT EXISTS idx_inventory_quantity ON public.inventory(quantity);
 
--- Index on SKU for quick lookup
-CREATE INDEX IF NOT EXISTS idx_inventory_sku ON public.inventory(sku) WHERE sku IS NOT NULL;
-
 -- Composite index on shop_id and quantity for low stock queries
 CREATE INDEX IF NOT EXISTS idx_inventory_shop_quantity ON public.inventory(shop_id, quantity);
 
