@@ -51,31 +51,31 @@ DROP POLICY IF EXISTS "Users manage own tasks" ON public.tasks;
 -- SELECT: All users in a shop can view shop tasks
 CREATE POLICY "View shop tasks"
     ON public.tasks FOR SELECT
-    USING (shop_id = auth.user_shop_id());
+    USING (shop_id = public.user_shop_id());
 
 -- INSERT: Owner and Staff can create shop tasks
 CREATE POLICY "Create shop tasks"
     ON public.tasks FOR INSERT
     WITH CHECK (
-        shop_id = auth.user_shop_id()
-        AND auth.can_edit()
+        shop_id = public.user_shop_id()
+        AND public.can_edit()
     );
 
 -- UPDATE: Owner and Staff can update shop tasks
 CREATE POLICY "Update shop tasks"
     ON public.tasks FOR UPDATE
-    USING (shop_id = auth.user_shop_id())
+    USING (shop_id = public.user_shop_id())
     WITH CHECK (
-        shop_id = auth.user_shop_id()
-        AND auth.can_edit()
+        shop_id = public.user_shop_id()
+        AND public.can_edit()
     );
 
 -- DELETE: Owner and Staff can delete shop tasks
 CREATE POLICY "Delete shop tasks"
     ON public.tasks FOR DELETE
     USING (
-        shop_id = auth.user_shop_id()
-        AND auth.can_edit()
+        shop_id = public.user_shop_id()
+        AND public.can_edit()
     );
 
 -- 7. VERIFY RLS IS ENABLED

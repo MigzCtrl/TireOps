@@ -26,31 +26,31 @@ DROP POLICY IF EXISTS "Enable read access for all users" ON public.work_orders;
 -- SELECT: All roles can view their shop's customers
 CREATE POLICY "View shop customers"
     ON public.customers FOR SELECT
-    USING (shop_id = auth.user_shop_id());
+    USING (shop_id = public.user_shop_id());
 
 -- INSERT: Owner and Staff can create customers
 CREATE POLICY "Create customers"
     ON public.customers FOR INSERT
     WITH CHECK (
-        shop_id = auth.user_shop_id()
-        AND auth.can_edit()
+        shop_id = public.user_shop_id()
+        AND public.can_edit()
     );
 
 -- UPDATE: Owner and Staff can update customers
 CREATE POLICY "Update customers"
     ON public.customers FOR UPDATE
-    USING (shop_id = auth.user_shop_id())
+    USING (shop_id = public.user_shop_id())
     WITH CHECK (
-        shop_id = auth.user_shop_id()
-        AND auth.can_edit()
+        shop_id = public.user_shop_id()
+        AND public.can_edit()
     );
 
 -- DELETE: Only Owner can delete customers
 CREATE POLICY "Delete customers"
     ON public.customers FOR DELETE
     USING (
-        shop_id = auth.user_shop_id()
-        AND auth.is_owner()
+        shop_id = public.user_shop_id()
+        AND public.is_owner()
     );
 
 -- 3. INVENTORY TABLE RLS POLICIES
@@ -59,31 +59,31 @@ CREATE POLICY "Delete customers"
 -- SELECT: All roles can view their shop's inventory
 CREATE POLICY "View shop inventory"
     ON public.inventory FOR SELECT
-    USING (shop_id = auth.user_shop_id());
+    USING (shop_id = public.user_shop_id());
 
 -- INSERT: Only Owner can add inventory
 CREATE POLICY "Create inventory"
     ON public.inventory FOR INSERT
     WITH CHECK (
-        shop_id = auth.user_shop_id()
-        AND auth.is_owner()
+        shop_id = public.user_shop_id()
+        AND public.is_owner()
     );
 
 -- UPDATE: Only Owner can update inventory
 CREATE POLICY "Update inventory"
     ON public.inventory FOR UPDATE
-    USING (shop_id = auth.user_shop_id())
+    USING (shop_id = public.user_shop_id())
     WITH CHECK (
-        shop_id = auth.user_shop_id()
-        AND auth.is_owner()
+        shop_id = public.user_shop_id()
+        AND public.is_owner()
     );
 
 -- DELETE: Only Owner can delete inventory
 CREATE POLICY "Delete inventory"
     ON public.inventory FOR DELETE
     USING (
-        shop_id = auth.user_shop_id()
-        AND auth.is_owner()
+        shop_id = public.user_shop_id()
+        AND public.is_owner()
     );
 
 -- 4. WORK ORDERS TABLE RLS POLICIES
@@ -92,31 +92,31 @@ CREATE POLICY "Delete inventory"
 -- SELECT: All roles can view their shop's work orders
 CREATE POLICY "View shop orders"
     ON public.work_orders FOR SELECT
-    USING (shop_id = auth.user_shop_id());
+    USING (shop_id = public.user_shop_id());
 
 -- INSERT: Owner and Staff can create work orders
 CREATE POLICY "Create work orders"
     ON public.work_orders FOR INSERT
     WITH CHECK (
-        shop_id = auth.user_shop_id()
-        AND auth.can_edit()
+        shop_id = public.user_shop_id()
+        AND public.can_edit()
     );
 
 -- UPDATE: Owner and Staff can update work orders
 CREATE POLICY "Update work orders"
     ON public.work_orders FOR UPDATE
-    USING (shop_id = auth.user_shop_id())
+    USING (shop_id = public.user_shop_id())
     WITH CHECK (
-        shop_id = auth.user_shop_id()
-        AND auth.can_edit()
+        shop_id = public.user_shop_id()
+        AND public.can_edit()
     );
 
 -- DELETE: Only Owner can delete work orders
 CREATE POLICY "Delete work orders"
     ON public.work_orders FOR DELETE
     USING (
-        shop_id = auth.user_shop_id()
-        AND auth.is_owner()
+        shop_id = public.user_shop_id()
+        AND public.is_owner()
     );
 
 -- 5. TASKS TABLE RLS POLICIES (Update existing)

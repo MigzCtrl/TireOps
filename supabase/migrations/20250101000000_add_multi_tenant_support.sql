@@ -80,27 +80,28 @@ CREATE INDEX IF NOT EXISTS idx_work_orders_customer ON public.work_orders(custom
 
 -- 5. CREATE HELPER FUNCTIONS FOR RLS
 -- =====================================================
+-- NOTE: Creating in public schema (not auth) due to Supabase permissions
 
 -- Function to get current user's shop_id
-CREATE OR REPLACE FUNCTION auth.user_shop_id()
+CREATE OR REPLACE FUNCTION public.user_shop_id()
 RETURNS UUID AS $$
     SELECT shop_id FROM public.profiles WHERE id = auth.uid()
 $$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
 -- Function to get current user's role
-CREATE OR REPLACE FUNCTION auth.user_role()
+CREATE OR REPLACE FUNCTION public.user_role()
 RETURNS TEXT AS $$
     SELECT role FROM public.profiles WHERE id = auth.uid()
 $$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
 -- Function to check if user is shop owner
-CREATE OR REPLACE FUNCTION auth.is_owner()
+CREATE OR REPLACE FUNCTION public.is_owner()
 RETURNS BOOLEAN AS $$
     SELECT role = 'owner' FROM public.profiles WHERE id = auth.uid()
 $$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
 -- Function to check if user can edit (owner or staff)
-CREATE OR REPLACE FUNCTION auth.can_edit()
+CREATE OR REPLACE FUNCTION public.can_edit()
 RETURNS BOOLEAN AS $$
     SELECT role IN ('owner', 'staff') FROM public.profiles WHERE id = auth.uid()
 $$ LANGUAGE SQL STABLE SECURITY DEFINER;
@@ -181,12 +182,12 @@ CREATE POLICY "Owners can update their shop"
 -- Profiles RLS: Users can view profiles in their shop
 CREATE POLICY "Users can view shop profiles"
     ON public.profiles FOR SELECT
-    USING (shop_id = auth.user_shop_id());
+    USING (shop_id = public.user_shop_id());
 
 CREATE POLICY "Owners can manage shop profiles"
     ON public.profiles FOR ALL
-    USING (shop_id = auth.user_shop_id() AND auth.is_owner())
-    WITH CHECK (shop_id = auth.user_shop_id() AND auth.is_owner());
+    USING (shop_id = public.user_shop_id() AND public.is_owner())
+    WITH CHECK (shop_id = public.user_shop_id() AND public.is_owner());
 
 -- =====================================================
 -- MIGRATION COMPLETE

@@ -19,7 +19,7 @@ CREATE POLICY "View shop work order items"
     USING (
         work_order_id IN (
             SELECT id FROM public.work_orders
-            WHERE shop_id = auth.user_shop_id()
+            WHERE shop_id = public.user_shop_id()
         )
     );
 
@@ -29,9 +29,9 @@ CREATE POLICY "Create work order items"
     WITH CHECK (
         work_order_id IN (
             SELECT id FROM public.work_orders
-            WHERE shop_id = auth.user_shop_id()
+            WHERE shop_id = public.user_shop_id()
         )
-        AND auth.can_edit()
+        AND public.can_edit()
     );
 
 -- UPDATE: Owner and Staff can update work order items for their shop's work orders
@@ -40,15 +40,15 @@ CREATE POLICY "Update work order items"
     USING (
         work_order_id IN (
             SELECT id FROM public.work_orders
-            WHERE shop_id = auth.user_shop_id()
+            WHERE shop_id = public.user_shop_id()
         )
     )
     WITH CHECK (
         work_order_id IN (
             SELECT id FROM public.work_orders
-            WHERE shop_id = auth.user_shop_id()
+            WHERE shop_id = public.user_shop_id()
         )
-        AND auth.can_edit()
+        AND public.can_edit()
     );
 
 -- DELETE: Only Owner can delete work order items for their shop's work orders
@@ -57,9 +57,9 @@ CREATE POLICY "Delete work order items"
     USING (
         work_order_id IN (
             SELECT id FROM public.work_orders
-            WHERE shop_id = auth.user_shop_id()
+            WHERE shop_id = public.user_shop_id()
         )
-        AND auth.is_owner()
+        AND public.is_owner()
     );
 
 -- 3. VERIFY RLS IS ENABLED
