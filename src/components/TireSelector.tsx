@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, Minus, X, ShoppingCart, Filter, Check } from 'lucide-react';
-import CustomSelect from './CustomSelect';
+import { Search, Plus, Minus, X, ShoppingCart, Filter, Check, Trash2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 export interface Tire {
   id: string;
@@ -23,7 +23,7 @@ interface TireSelectorProps {
   tires: Tire[];
   selectedTires: SelectedTire[];
   onTiresChange: (tires: SelectedTire[]) => void;
-  customerTireSize?: string; // e.g., "205/55R16"
+  customerTireSize?: string;
   className?: string;
   onStockError?: (message: string) => void;
 }
@@ -44,13 +44,11 @@ export default function TireSelector({
     brand: '',
     inStockOnly: true,
   });
-  const [hoveredIndex, setHoveredIndex] = useState<number>(-1);
-  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-  const [cartExpanded, setCartExpanded] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
+  const [expandedTireId, setExpandedTireId] = useState<string | null>(null);
+  const [tempQuantity, setTempQuantity] = useState(1);
+  const [isCartExpanded, setIsCartExpanded] = useState(false);
 
-  // Parse tire size (e.g., "205/55R16" -> { width: "205", aspect: "55", rim: "16" })
+  // Parse tire size
   const parseTireSize = (size: string) => {
     const match = size.match(/(\d+)\/(\d+)R(\d+)/);
     if (!match) return null;
@@ -61,7 +59,7 @@ export default function TireSelector({
     };
   };
 
-  // Auto-detect customer's tire size and set filters
+  // Auto-detect customer's tire size
   useEffect(() => {
     if (customerTireSize) {
       const parsed = parseTireSize(customerTireSize);
@@ -76,12 +74,10 @@ export default function TireSelector({
     }
   }, [customerTireSize]);
 
-  // Filter tires based on search and filters
+  // Filter tires
   const filteredTires = tires.filter(tire => {
-    // Stock filter
     if (filters.inStockOnly && tire.quantity <= 0) return false;
 
-    // Size filters
     const parsed = parseTireSize(tire.size);
     if (parsed) {
       if (filters.width && parsed.width !== filters.width) return false;
@@ -89,12 +85,10 @@ export default function TireSelector({
       if (filters.rim && parsed.rim !== filters.rim) return false;
     }
 
-    // Brand filter
     if (filters.brand && !tire.brand.toLowerCase().includes(filters.brand.toLowerCase())) {
       return false;
     }
 
-    // Search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const matchesSearch =
@@ -121,26 +115,22 @@ export default function TireSelector({
     return Array.from(values).sort();
   };
 
-  const addTire = (tire: Tire, quantity: number = 1) => {
+  const addTire = (tire: Tire, quantity: number) => {
     const existing = selectedTires.find(st => st.tire.id === tire.id);
     const currentQty = existing ? existing.quantity : 0;
     const availableStock = tire.quantity - currentQty;
 
-    // Check if tire has no stock
     if (tire.quantity === 0) {
       onStockError?.(`${tire.brand} ${tire.model} is out of stock`);
       return;
     }
 
-    // Cap quantity to available stock
     const actualQuantity = Math.min(quantity, availableStock);
 
-    // Show error if requested more than available
     if (actualQuantity < quantity) {
       onStockError?.(`Only ${availableStock} ${tire.brand} ${tire.model} available in stock`);
     }
 
-    // Don't add if no stock available
     if (actualQuantity === 0) {
       return;
     }
@@ -154,6 +144,10 @@ export default function TireSelector({
     } else {
       onTiresChange([...selectedTires, { tire, quantity: actualQuantity }]);
     }
+
+    // Reset and collapse
+    setExpandedTireId(null);
+    setTempQuantity(1);
   };
 
   const updateQuantity = (tireId: string, delta: number) => {
@@ -162,13 +156,11 @@ export default function TireSelector({
         if (st.tire.id === tireId) {
           const newQty = st.quantity + delta;
 
-          // Don't allow negative or zero quantities (remove instead)
           if (newQty <= 0) return null;
 
-          // Enforce stock limit when increasing
           if (delta > 0 && newQty > st.tire.quantity) {
             onStockError?.(`Only ${st.tire.quantity} ${st.tire.brand} ${st.tire.model} available in stock`);
-            return { ...st, quantity: st.tire.quantity }; // Cap at max stock
+            return { ...st, quantity: st.tire.quantity };
           }
 
           return { ...st, quantity: newQty };
@@ -183,12 +175,8 @@ export default function TireSelector({
     onTiresChange(selectedTires.filter(st => st.tire.id !== tireId));
   };
 
-  const setPreset = (count: number) => {
-    // Only apply to the currently selected tire
-    if (filteredTires.length > 0 && selectedIndex >= 0 && selectedIndex < filteredTires.length) {
-      const tire = filteredTires[selectedIndex];
-      addTire(tire, count);
-    }
+  const clearAll = () => {
+    onTiresChange([]);
   };
 
   const clearFilters = () => {
@@ -202,40 +190,27 @@ export default function TireSelector({
     setSearchQuery('');
   };
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!searchInputRef.current || document.activeElement !== searchInputRef.current) {
-        return;
-      }
-
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setHoveredIndex(prev => {
-          const newIndex = prev < 0 ? 0 : Math.min(prev + 1, filteredTires.length - 1);
-          return newIndex;
-        });
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setHoveredIndex(prev => Math.max(prev - 1, 0));
-      } else if ((e.key === 'Enter' || e.key === ' ') && filteredTires.length > 0 && hoveredIndex >= 0) {
-        e.preventDefault();
-        // Enter/Space selects the hovered tire
-        setSelectedIndex(hoveredIndex);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [filteredTires, hoveredIndex]);
-
-  // Scroll hovered item into view
-  useEffect(() => {
-    if (resultsRef.current && hoveredIndex >= 0) {
-      const hovered = resultsRef.current.children[hoveredIndex] as HTMLElement;
-      hovered?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const getStockBadge = (quantity: number) => {
+    if (quantity === 0) {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-danger/20 text-xs font-medium text-danger border border-danger/30 text-center">
+          Out of Stock
+        </span>
+      );
+    } else if (quantity < 10) {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-secondary/20 text-xs font-medium text-secondary border border-secondary/30 text-center">
+          Low Stock {quantity}
+        </span>
+      );
+    } else {
+      return (
+        <span className="px-2 py-0.5 rounded-full bg-success/20 text-xs font-medium text-success border border-success/30 text-center">
+          In Stock {quantity}
+        </span>
+      );
     }
-  }, [hoveredIndex]);
+  };
 
   const totalCost = selectedTires.reduce((sum, st) => sum + st.tire.price * st.quantity, 0);
   const totalQuantity = selectedTires.reduce((sum, st) => sum + st.quantity, 0);
@@ -243,18 +218,18 @@ export default function TireSelector({
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Section Header */}
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Select Tires</h3>
+      <h3 className="text-sm font-semibold text-text uppercase tracking-wide">Select Tires</h3>
 
-      {/* Filters Card */}
-      <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-200/50 dark:border-gray-700/50">
+      {/* Filters */}
+      <div className="p-4 rounded-lg bg-bg border border-border-muted">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-500 dark:text-gray-400" />
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            <Filter size={16} className="text-text-muted" />
+            <span className="text-sm font-medium text-text-muted">
               Filters
             </span>
             {customerTireSize && (
-              <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-xs font-medium text-blue-700 dark:text-blue-300">
+              <span className="px-2 py-0.5 rounded bg-bg-light text-xs font-medium text-text border border-border-muted">
                 {customerTireSize}
               </span>
             )}
@@ -262,318 +237,328 @@ export default function TireSelector({
           <button
             type="button"
             onClick={clearFilters}
-            className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium"
+            className="text-sm text-primary hover:underline font-medium"
           >
-            Clear
+            Clear Filters
           </button>
         </div>
 
-        {/* Single Row Filters with Wrap */}
-        <div className="flex flex-wrap gap-2 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700/50">
-          <div className="w-[calc(33.333%-0.333rem)]">
-            <CustomSelect
-              value={filters.width}
-              onChange={value => setFilters({ ...filters, width: value })}
-              options={['', ...getUniqueValues('width')]}
-              placeholder="Width"
-            />
-          </div>
-          <div className="w-[calc(33.333%-0.333rem)]">
-            <CustomSelect
-              value={filters.aspect}
-              onChange={value => setFilters({ ...filters, aspect: value })}
-              options={['', ...getUniqueValues('aspect')]}
-              placeholder="Aspect"
-            />
-          </div>
-          <div className="w-[calc(33.333%-0.333rem)]">
-            <CustomSelect
-              value={filters.rim}
-              onChange={value => setFilters({ ...filters, rim: value })}
-              options={['', ...getUniqueValues('rim')]}
-              placeholder="Rim"
-            />
-          </div>
-          <div className="w-[calc(50%-0.25rem)]">
-            <CustomSelect
-              value={filters.brand}
-              onChange={value => setFilters({ ...filters, brand: value })}
-              options={['', ...getUniqueValues('brand')]}
-              placeholder="All Brands"
-            />
-          </div>
-          {/* In Stock Only Chip */}
-          <div className="w-[calc(50%-0.25rem)]">
-            <button
-              type="button"
-              onClick={() => setFilters({ ...filters, inStockOnly: !filters.inStockOnly })}
-              className={`w-full h-11 px-3 rounded-lg border text-xs font-medium transition-all flex items-center justify-center gap-2 ${
-                filters.inStockOnly
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700/50 text-blue-700 dark:text-blue-300'
-                  : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600'
-              }`}
-            >
-              {filters.inStockOnly && <Check size={14} />}
-              <span>In Stock Only</span>
-            </button>
-          </div>
+        {/* Filter Dropdowns */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <Select value={filters.width || '__none__'} onValueChange={value => setFilters({ ...filters, width: value === '__none__' ? '' : value })}>
+            <SelectTrigger className="bg-bg-light border-border-muted text-text hover:bg-highlight cursor-pointer">
+              <SelectValue placeholder="Width" />
+            </SelectTrigger>
+            <SelectContent className="bg-bg-light border-border-muted">
+              <SelectItem value="__none__" className="text-text hover:bg-highlight cursor-pointer">All</SelectItem>
+              {getUniqueValues('width').map(option => (
+                <SelectItem key={option} value={option} className="text-text hover:bg-highlight cursor-pointer">
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.aspect || '__none__'} onValueChange={value => setFilters({ ...filters, aspect: value === '__none__' ? '' : value })}>
+            <SelectTrigger className="bg-bg-light border-border-muted text-text hover:bg-highlight cursor-pointer">
+              <SelectValue placeholder="Aspect" />
+            </SelectTrigger>
+            <SelectContent className="bg-bg-light border-border-muted">
+              <SelectItem value="__none__" className="text-text hover:bg-highlight cursor-pointer">All</SelectItem>
+              {getUniqueValues('aspect').map(option => (
+                <SelectItem key={option} value={option} className="text-text hover:bg-highlight cursor-pointer">
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.rim || '__none__'} onValueChange={value => setFilters({ ...filters, rim: value === '__none__' ? '' : value })}>
+            <SelectTrigger className="bg-bg-light border-border-muted text-text hover:bg-highlight cursor-pointer">
+              <SelectValue placeholder="Rim" />
+            </SelectTrigger>
+            <SelectContent className="bg-bg-light border-border-muted">
+              <SelectItem value="__none__" className="text-text hover:bg-highlight cursor-pointer">All</SelectItem>
+              {getUniqueValues('rim').map(option => (
+                <SelectItem key={option} value={option} className="text-text hover:bg-highlight cursor-pointer">
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.brand || '__none__'} onValueChange={value => setFilters({ ...filters, brand: value === '__none__' ? '' : value })}>
+            <SelectTrigger className="bg-bg-light border-border-muted text-text hover:bg-highlight cursor-pointer">
+              <SelectValue placeholder="All Brands" />
+            </SelectTrigger>
+            <SelectContent className="bg-bg-light border-border-muted">
+              <SelectItem value="__none__" className="text-text hover:bg-highlight cursor-pointer">All Brands</SelectItem>
+              {getUniqueValues('brand').map(option => (
+                <SelectItem key={option} value={option} className="text-text hover:bg-highlight cursor-pointer">
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        {/* In Stock Toggle */}
+        <button
+          type="button"
+          onClick={() => setFilters({ ...filters, inStockOnly: !filters.inStockOnly })}
+          className={`w-full py-2 px-3 rounded-lg border text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            filters.inStockOnly
+              ? 'bg-primary/10 border-primary/30 text-primary'
+              : 'bg-bg-light border-border-muted text-text-muted hover:border-border'
+          }`}
+        >
+          {filters.inStockOnly && <Check size={16} />}
+          <span>In Stock Only</span>
+        </button>
+
+        {/* Search */}
+        <div className="relative mt-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
           <input
-            ref={searchInputRef}
             type="text"
             value={searchQuery}
-            onChange={e => {
-              setSearchQuery(e.target.value);
-              setSelectedIndex(-1); // Clear selection when searching
-              setHoveredIndex(-1);
-            }}
+            onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search brand, model, or size..."
-            className="w-full h-11 pl-9 pr-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs placeholder-gray-500 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full h-10 pl-10 pr-3 rounded-lg border border-border-muted bg-bg-light text-text text-sm placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
           />
         </div>
       </div>
 
-      {/* Segmented Quantity Control */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Quick Add</span>
-          {filteredTires.length > 0 && (
-            <span className="text-[10px] text-gray-500 dark:text-gray-500">
-              {selectedIndex >= 0 && filteredTires[selectedIndex]
-                ? `Selected: ${filteredTires[selectedIndex].brand} ${filteredTires[selectedIndex].model}`
-                : 'Click to select a tire'}
-            </span>
-          )}
+      {/* Available Tires List */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <h4 className="text-sm font-medium text-text-muted">
+            Available Tires ({filteredTires.length})
+          </h4>
         </div>
-        <div className="flex gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-          {[1, 2, 3, 4].map(qty => {
-            const selectedTire = selectedIndex >= 0 ? filteredTires[selectedIndex] : null;
-            const existing = selectedTire ? selectedTires.find(st => st.tire.id === selectedTire.id) : null;
-            const currentQty = existing ? existing.quantity : 0;
-            const availableStock = selectedTire ? selectedTire.quantity - currentQty : 0;
-            const isDisabled = filteredTires.length === 0 || !selectedTire || availableStock === 0;
-            const exceedsStock = selectedTire && qty > availableStock;
 
-            return (
-              <button
-                key={qty}
-                type="button"
-                onClick={() => setPreset(qty)}
-                disabled={isDisabled}
-                className={`flex-1 h-9 rounded-md text-xs font-semibold transition-all shadow-sm disabled:cursor-not-allowed ${
-                  exceedsStock
-                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-600 opacity-50 cursor-not-allowed'
-                    : isDisabled
-                    ? 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 opacity-40'
-                    : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-700 dark:hover:text-blue-300 hover:shadow'
-                }`}
-                title={exceedsStock ? `Only ${availableStock} available` : isDisabled ? 'Click to select a tire first' : `Add ${qty} tire(s)`}
+        <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+          <AnimatePresence mode="popLayout">
+            {filteredTires.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="p-8 text-center bg-bg rounded-lg border border-border-muted"
               >
-                {qty}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Results List */}
-      <div className="rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden max-h-[400px] overflow-y-auto">
-        <AnimatePresence mode="popLayout">
-          {filteredTires.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="p-8 text-center text-gray-500 dark:text-gray-400"
-            >
-              <p className="font-medium">No tires match your filters</p>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                Clear filters to see all tires
-              </button>
-            </motion.div>
-          ) : (
-            <div ref={resultsRef}>
-              {filteredTires.map((tire, index) => (
-                <motion.div
-                  key={tire.id}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.15 }}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(-1)}
-                  onClick={() => setSelectedIndex(index)}
-                  className={`px-4 py-3 transition-colors border-b border-gray-100 dark:border-gray-700/50 last:border-b-0 cursor-pointer ${
-                    index === selectedIndex
-                      ? 'bg-blue-50 dark:bg-blue-900/10 ring-2 ring-inset ring-blue-400 dark:ring-blue-600'
-                      : index === hoveredIndex
-                      ? 'bg-gray-100 dark:bg-gray-700/50'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'
-                  }`}
+                <p className="text-text-muted font-medium mb-2">No tires match your filters</p>
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-sm text-primary hover:underline"
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    {/* Left: Tire Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-semibold text-gray-900 dark:text-white text-xs truncate">
-                          {tire.brand} {tire.model}
-                        </h4>
-                        {tire.quantity <= 5 && tire.quantity > 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-[10px] font-medium text-yellow-700 dark:text-yellow-400 flex-shrink-0">
-                            Low Stock
-                          </span>
-                        )}
-                        {tire.quantity === 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-[10px] font-medium text-red-700 dark:text-red-400 flex-shrink-0">
-                            Out of Stock
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px]">
-                        <span className="text-gray-600 dark:text-gray-400 font-medium">{tire.size}</span>
-                        <span className="font-semibold text-gray-900 dark:text-white">
-                          ${tire.price.toFixed(2)}
-                        </span>
-                        <span className="text-gray-500 dark:text-gray-500">
-                          {tire.quantity} in stock
-                        </span>
-                      </div>
-                    </div>
+                  Clear filters to see all tires
+                </button>
+              </motion.div>
+            ) : (
+              filteredTires.map((tire) => {
+                const isExpanded = expandedTireId === tire.id;
+                const existing = selectedTires.find(st => st.tire.id === tire.id);
+                const currentQty = existing ? existing.quantity : 0;
+                const availableStock = tire.quantity - currentQty;
 
-                    {/* Right: Add Button */}
+                return (
+                  <motion.div
+                    key={tire.id}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.15 }}
+                    className="bg-bg rounded-lg border border-border-muted overflow-hidden"
+                  >
+                    {/* Tire Card - Clickable */}
                     <button
                       type="button"
-                      onClick={() => addTire(tire, 1)}
-                      disabled={tire.quantity === 0}
-                      className="h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600 flex-shrink-0"
+                      onClick={() => {
+                        if (tire.quantity > 0) {
+                          setExpandedTireId(isExpanded ? null : tire.id);
+                          setTempQuantity(1);
+                        }
+                      }}
+                      className={`w-full p-4 text-left transition-colors ${
+                        isExpanded
+                          ? 'bg-bg-light'
+                          : 'hover:bg-bg-light/50'
+                      } ${tire.quantity === 0 ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
-                      <Plus size={14} />
-                      Add
+                      <div className="flex items-start justify-between gap-4">
+                        {/* Left: Tire Info */}
+                        <div className="flex-1 min-w-0">
+                          <h5 className="text-base font-medium text-text mb-1">
+                            {tire.brand} {tire.model}
+                          </h5>
+                          <div className="flex flex-wrap items-center gap-3 text-sm">
+                            <span className="text-text-muted font-medium">{tire.size}</span>
+                            <span className="text-lg font-medium text-text">
+                              ${tire.price.toFixed(2)}
+                            </span>
+                            {getStockBadge(tire.quantity)}
+                          </div>
+                        </div>
+                      </div>
                     </button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </AnimatePresence>
+
+                    {/* Expanded: Quantity Stepper + Add Button */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="border-t border-border-muted bg-bg-light"
+                        >
+                          <div className="p-4 flex items-center gap-3">
+                            {/* Quantity Stepper */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-text-muted">Quantity:</span>
+                              <div className="flex items-center gap-1 bg-bg border border-border-muted rounded-lg p-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setTempQuantity(Math.max(1, tempQuantity - 1))}
+                                  className="p-2 hover:bg-bg-light rounded transition-colors"
+                                >
+                                  <Minus size={16} className="text-text-muted" />
+                                </button>
+                                <span className="px-4 text-base font-bold text-text min-w-[3ch] text-center">
+                                  {tempQuantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setTempQuantity(Math.min(availableStock, tempQuantity + 1))}
+                                  disabled={tempQuantity >= availableStock}
+                                  className="p-2 hover:bg-bg-light rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Plus size={16} className="text-text-muted" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Add Button */}
+                            <button
+                              type="button"
+                              onClick={() => addTire(tire, tempQuantity)}
+                              disabled={availableStock === 0}
+                              className="flex-1 py-2 px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Plus size={18} />
+                              Add to Cart ({tempQuantity})
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* Selected Tires Dock - Compact & Collapsible */}
+      {/* Floating Cart - Bottom Right Popup */}
       <AnimatePresence>
         {selectedTires.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-4 right-4 z-50"
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            className="fixed bottom-6 right-6 z-50"
           >
-            {/* Collapsed Summary Bar */}
-            {!cartExpanded && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                onClick={() => setCartExpanded(true)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all"
-              >
-                <ShoppingCart size={16} />
-                <div className="flex items-center gap-2 text-xs font-semibold">
-                  <span>{totalQuantity} {totalQuantity === 1 ? 'item' : 'items'}</span>
-                  <span className="text-blue-200">—</span>
-                  <span>${totalCost.toFixed(2)}</span>
-                </div>
-              </motion.button>
-            )}
-
-            {/* Expanded Panel */}
-            {cartExpanded && (
+            {isCartExpanded ? (
+              /* Expanded Cart */
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-80 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden"
+                initial={{ width: 320 }}
+                animate={{ width: 400, height: 'auto' }}
+                className="bg-bg rounded-lg shadow-2xl border-2 border-primary overflow-hidden max-h-[600px] flex flex-col"
               >
                 {/* Header */}
-                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-primary/30 flex-shrink-0">
                   <div className="flex items-center gap-2">
-                    <ShoppingCart size={14} className="text-gray-600 dark:text-gray-400" />
-                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      Selected ({totalQuantity})
+                    <ShoppingCart size={18} className="text-primary" />
+                    <span className="text-sm font-semibold text-primary">
+                      Cart ({totalQuantity} {totalQuantity === 1 ? 'item' : 'items'})
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setCartExpanded(false)}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-                  >
-                    <X size={14} className="text-gray-500 dark:text-gray-400" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={clearAll}
+                      className="p-1.5 hover:bg-danger/10 rounded transition-colors"
+                      title="Clear All"
+                    >
+                      <Trash2 size={16} className="text-danger" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCartExpanded(false)}
+                      className="p-1.5 hover:bg-bg-light rounded transition-colors"
+                      title="Minimize"
+                    >
+                      <Minus size={16} className="text-text-muted" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Items List */}
-                <div className="max-h-64 overflow-y-auto">
-                  {selectedTires.map(st => (
+                <div className="overflow-y-auto flex-1">
+                  {selectedTires.map((st, index) => (
                     <div
                       key={st.tire.id}
-                      className="px-3 py-2 border-b border-gray-100 dark:border-gray-700/50 last:border-b-0"
+                      className={`px-4 py-3 border-b border-border-muted last:border-b-0 ${
+                        index % 2 === 0 ? 'bg-bg' : 'bg-bg-light/50'
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-2">
                         {/* Tire Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[11px] font-semibold text-gray-900 dark:text-white truncate">
-                            {st.tire.brand} {st.tire.model}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-text truncate">
+                              {st.tire.brand} {st.tire.model}
+                            </div>
+                            <div className="text-xs text-text-muted mt-0.5">
+                              {st.tire.size} • ${st.tire.price.toFixed(2)} each
+                            </div>
                           </div>
-                          <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                            {st.tire.size}
-                          </div>
-                          <div className="text-[10px] text-gray-600 dark:text-gray-300 font-medium mt-0.5">
-                            ${st.tire.price.toFixed(2)} × {st.quantity} = ${(st.tire.price * st.quantity).toFixed(2)}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeTire(st.tire.id)}
+                            className="p-1 hover:bg-danger/10 rounded transition-colors flex-shrink-0"
+                          >
+                            <X size={14} className="text-danger" />
+                          </button>
                         </div>
 
-                        {/* Controls */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {/* Quantity Controls */}
-                          <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-700 rounded p-0.5">
+                        {/* Quantity Controls + Subtotal */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1 bg-bg-light rounded-lg p-1">
                             <button
                               type="button"
                               onClick={() => updateQuantity(st.tire.id, -1)}
-                              className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
-                              title="Decrease quantity"
+                              className="p-1.5 hover:bg-bg rounded transition-colors"
                             >
-                              <Minus size={12} className="text-gray-600 dark:text-gray-300" />
+                              <Minus size={12} className="text-text-muted" />
                             </button>
-                            <span className="px-1.5 text-[11px] font-semibold text-gray-900 dark:text-white min-w-[1.5ch] text-center">
+                            <span className="px-3 text-sm font-semibold text-text min-w-[2ch] text-center">
                               {st.quantity}
                             </span>
                             <button
                               type="button"
                               onClick={() => updateQuantity(st.tire.id, 1)}
                               disabled={st.quantity >= st.tire.quantity}
-                              className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                              title={st.quantity >= st.tire.quantity ? `Max stock: ${st.tire.quantity}` : 'Increase quantity'}
+                              className="p-1.5 hover:bg-bg rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <Plus size={12} className="text-gray-600 dark:text-gray-300" />
+                              <Plus size={12} className="text-text-muted" />
                             </button>
                           </div>
-
-                          {/* Remove Button */}
-                          <button
-                            type="button"
-                            onClick={() => removeTire(st.tire.id)}
-                            className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
-                            title="Remove"
-                          >
-                            <X size={12} className="text-red-600 dark:text-red-400" />
-                          </button>
+                          <div className="text-sm font-semibold text-text">
+                            ${(st.tire.price * st.quantity).toFixed(2)}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -581,11 +566,35 @@ export default function TireSelector({
                 </div>
 
                 {/* Footer - Total */}
-                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Total</span>
-                  <span className="text-sm font-bold text-gray-900 dark:text-white">${totalCost.toFixed(2)}</span>
+                <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-t border-primary/30 flex-shrink-0">
+                  <span className="text-base font-semibold text-primary">Total</span>
+                  <span className="text-xl font-bold text-primary">${totalCost.toFixed(2)}</span>
                 </div>
               </motion.div>
+            ) : (
+              /* Collapsed Cart */
+              <motion.button
+                type="button"
+                onClick={() => setIsCartExpanded(true)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-xl px-4 py-3 flex items-center gap-3 transition-all"
+              >
+                <div className="relative">
+                  <ShoppingCart size={24} />
+                  <span className="absolute -top-2 -right-2 bg-danger text-danger-foreground text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {totalQuantity}
+                  </span>
+                </div>
+                <div className="text-left">
+                  <div className="text-xs font-medium opacity-90">
+                    {totalQuantity} {totalQuantity === 1 ? 'item' : 'items'}
+                  </div>
+                  <div className="text-lg font-bold">
+                    ${totalCost.toFixed(2)}
+                  </div>
+                </div>
+              </motion.button>
             )}
           </motion.div>
         )}

@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -30,6 +31,7 @@ interface LowStockItem {
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const { profile, shop } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
@@ -72,10 +74,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Fetch low stock items
   useEffect(() => {
     async function fetchLowStock() {
+      if (!profile?.shop_id) return;
+
       try {
         const { data, error } = await supabase
           .from('inventory')
           .select('id, brand, model, size, quantity')
+          .eq('shop_id', profile.shop_id)
           .lt('quantity', 5)
           .order('quantity', { ascending: true });
 
@@ -99,13 +104,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // Refresh every 30 seconds
     const interval = setInterval(fetchLowStock, 30000);
     return () => clearInterval(interval);
-  }, [supabase]);
+  }, [profile?.shop_id, supabase]);
 
   // Handle logout
   async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Logout failed:', error);
+      }
+      router.push('/login');
+      router.refresh();
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
   }
 
   // Close dropdown when clicking outside
@@ -157,7 +169,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Search for customers and tires as user types
   useEffect(() => {
     const searchData = async () => {
-      if (!globalSearch.trim()) {
+      if (!globalSearch.trim() || !profile?.shop_id) {
         setSearchResults([]);
         setShowDropdown(false);
         return;
@@ -170,6 +182,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         const { data: customers } = await supabase
           .from('customers')
           .select('id, name, email, phone')
+          .eq('shop_id', profile.shop_id)
           .or(`name.ilike.%${globalSearch}%,email.ilike.%${globalSearch}%,phone.ilike.%${globalSearch}%`)
           .limit(5);
 
@@ -177,6 +190,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         const { data: tires } = await supabase
           .from('inventory')
           .select('id, brand, model, size')
+          .eq('shop_id', profile.shop_id)
           .or(`brand.ilike.%${globalSearch}%,model.ilike.%${globalSearch}%,size.ilike.%${globalSearch}%`)
           .limit(5);
 
@@ -215,7 +229,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     const debounceTimer = setTimeout(searchData, 300);
     return () => clearTimeout(debounceTimer);
-  }, [globalSearch, supabase]);
+  }, [globalSearch, profile?.shop_id, supabase]);
 
   const handleGlobalSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,21 +280,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed left-0 top-0 h-full w-64 glass border-r z-50 shadow-2xl transition-transform duration-300 lg:translate-x-0 ${
+      <aside className={`fixed left-0 top-0 h-full w-64 bg-bg border-r border-border-muted z-50 shadow-2xl transition-transform duration-300 lg:translate-x-0 ${
         mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">BBT</span>
+            <div className="w-8 h-8 bg-bg-light rounded-lg flex items-center justify-center">
+              <span className="text-text-muted font-bold">BBT</span>
             </div>
-            <span className="font-bold text-xl dark:text-white">Big Boy Tires</span>
+            <span className="font-bold text-xl text-text">Big Boy Tires</span>
             {/* Close button for mobile */}
             <button
               onClick={() => setMobileMenuOpen(false)}
-              className="ml-auto lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="ml-auto lg:hidden p-2 rounded-lg text-text hover:bg-primary/10 transition-colors"
             >
-              <X size={20} className="dark:text-white" />
+              <X size={20} />
             </button>
           </div>
 
@@ -294,8 +308,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   href={item.href}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
                     active
-                      ? 'bg-blue-500/20 dark:bg-blue-500/30 text-blue-600 dark:text-blue-400 shadow-lg glow-blue backdrop-blur-xl border border-blue-500/30'
-                      : 'hover:bg-white/50 dark:hover:bg-gray-700/50 dark:text-gray-300 hover:shadow-lg hover:-translate-x-1 backdrop-blur-sm'
+                      ? 'bg-primary/20 text-primary shadow-lg border border-primary/30'
+                      : 'text-text-muted hover:bg-primary/10 hover:shadow-lg hover:-translate-x-1'
                   }`}
                 >
                   <Icon size={20} />
@@ -310,14 +324,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main Content */}
       <div className="lg:ml-64">
         {/* Header */}
-        <header className="glass border-b px-4 lg:px-8 py-4 sticky top-0 z-30 shadow-lg">
+        <header className="bg-bg border-b border-border-muted px-4 lg:px-8 py-4 sticky top-0 z-30 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             {/* Hamburger button for mobile */}
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+              className="lg:hidden p-2 rounded-lg text-text hover:bg-primary/10 transition-colors flex-shrink-0"
             >
-              <Menu size={24} className="dark:text-white" />
+              <Menu size={24} />
             </button>
 
             {/* Search Bar - visible on medium screens and up */}
@@ -331,19 +345,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     value={globalSearch}
                     onChange={(e) => setGlobalSearch(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-border-muted bg-bg-light text-text focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
                   />
                 </form>
 
                 {/* Search Dropdown */}
                 {showDropdown && searchResults.length > 0 && (
-                  <div className="absolute top-full mt-2 w-full bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 max-h-96 overflow-y-auto z-50 p-1">
+                  <div className="absolute top-full mt-2 w-full bg-bg-light rounded-lg shadow-xl border border-border-muted max-h-96 overflow-y-auto z-50 p-1">
                     {searchResults.map((result, index) => (
                       <button
                         key={`${result.type}-${result.id}`}
                         onClick={() => handleResultClick(result)}
-                        className={`w-full text-left px-4 py-3 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-3 ${
-                          index === selectedIndex ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                        className={`w-full text-left px-4 py-3 rounded-md hover:bg-primary/20 transition-colors flex items-center gap-3 ${
+                          index === selectedIndex ? 'bg-primary/20' : ''
                         } ${
                           index !== searchResults.length - 1 ? 'mb-1' : ''
                         }`}
@@ -351,25 +365,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         <div
                           className={`p-2 rounded-lg ${
                             result.type === 'customer'
-                              ? 'bg-blue-100 dark:bg-blue-900/20'
-                              : 'bg-green-100 dark:bg-green-900/20'
+                              ? 'bg-info/20'
+                              : 'bg-success/20'
                           }`}
                         >
                           {result.type === 'customer' ? (
-                            <Users size={18} className="text-blue-600 dark:text-blue-400" />
+                            <Users size={18} className="text-info" />
                           ) : (
-                            <Package size={18} className="text-green-600 dark:text-green-400" />
+                            <Package size={18} className="text-success" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium dark:text-white truncate">{result.name}</div>
+                          <div className="font-medium text-text truncate">{result.name}</div>
                           {result.subtitle && (
-                            <div className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                            <div className="text-sm text-text-muted truncate">
                               {result.subtitle}
                             </div>
                           )}
                         </div>
-                        <div className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                        <div className="text-xs px-2 py-1 rounded bg-bg border border-border-muted text-text-muted">
                           {result.type === 'customer' ? 'Customer' : 'Tire'}
                         </div>
                       </button>
@@ -381,12 +395,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
             {/* Right side buttons - flex-shrink-0 to prevent collapsing */}
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              {/* Shop Name */}
+              {shop && (
+                <div className="hidden sm:block text-sm text-text-muted border-r border-border-muted pr-4">
+                  {shop.name}
+                </div>
+              )}
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                className="p-2 rounded-lg text-text-muted hover:bg-bg-light transition-colors flex-shrink-0"
               >
                 {theme === 'dark' ? (
-                  <Sun size={20} className="text-yellow-500" />
+                  <Sun size={20} className="text-secondary" />
                 ) : (
                   <Moon size={20} />
                 )}
@@ -395,9 +415,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <div className="relative flex-shrink-0" ref={notificationRef}>
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 relative transition-colors"
+                  className="p-2 rounded-lg text-text-muted hover:bg-bg-light relative transition-colors"
                 >
-                  <Bell size={20} className="dark:text-gray-300" />
+                  <Bell size={20} />
                   {lowStockItems.some(item => item.quantity === 0) ? (
                     <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                   ) : lowStockItems.length > 0 ? (
@@ -408,21 +428,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 {/* Notifications Dropdown */}
                 {showNotifications && (
                   <div
-                    className="fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto top-16 sm:top-auto sm:mt-3 w-auto sm:w-[480px] bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 z-[100] max-h-[calc(100vh-5rem)] sm:max-h-[700px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-300"
+                    className="fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto top-16 sm:top-auto sm:mt-3 w-auto sm:w-[480px] bg-bg border border-border-muted rounded-2xl shadow-2xl z-[100] max-h-[calc(100vh-5rem)] sm:max-h-[700px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-300"
                     onTouchMove={(e) => e.stopPropagation()}
                   >
                     {/* Header */}
-                    <div className="px-6 py-5 border-b border-gray-100/80 dark:border-gray-700/50">
+                    <div className="px-6 py-5 border-b border-border-muted">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-blue-500/10 dark:bg-blue-400/10">
-                            <Bell size={20} className="text-blue-600 dark:text-blue-400" />
+                          <div className="p-2 rounded-xl bg-info/10">
+                            <Bell size={20} className="text-info" />
                           </div>
-                          <h3 className="font-semibold text-lg dark:text-white">Notifications</h3>
+                          <h3 className="font-semibold text-lg text-text">Notifications</h3>
                         </div>
                         {lowStockItems.length > 0 && (
                           <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-full">
+                            <span className="px-3 py-1 text-xs font-semibold bg-danger text-danger-foreground rounded-full">
                               {lowStockItems.length}
                             </span>
                           </div>
@@ -434,7 +454,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className="overflow-y-auto flex-1 p-3">
                       {lowStockItems.length === 0 ? (
                         <div className="px-6 py-16 text-center">
-                          <p className="text-sm text-gray-400 dark:text-gray-500">
+                          <p className="text-sm text-text-muted">
                             No notifications
                           </p>
                         </div>
@@ -447,7 +467,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 router.push('/inventory');
                                 setShowNotifications(false);
                               }}
-                              className="w-full p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-300 text-left rounded-xl group border border-gray-100 dark:border-gray-800 hover:border-orange-200 dark:hover:border-orange-900/50 hover:shadow-md"
+                              className="w-full p-4 hover:bg-bg-light transition-all duration-300 text-left rounded-xl group border border-border-muted hover:border-warning/30 hover:shadow-md"
                               style={{
                                 animation: `slideIn 0.4s ease-out ${index * 0.06}s both`
                               }}
@@ -456,35 +476,35 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                 <div className="flex-shrink-0">
                                   <div className={`p-3 rounded-xl transition-transform group-hover:scale-110 ${
                                     item.quantity === 0
-                                      ? 'bg-red-50 dark:bg-red-900/20'
-                                      : 'bg-orange-50 dark:bg-orange-900/20'
+                                      ? 'bg-danger/20'
+                                      : 'bg-warning/20'
                                   }`}>
                                     <AlertTriangle size={24} className={
                                       item.quantity === 0
-                                        ? 'text-red-500 dark:text-red-400'
-                                        : 'text-orange-500 dark:text-orange-400'
+                                        ? 'text-danger'
+                                        : 'text-warning'
                                     } />
                                   </div>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center justify-between gap-3 mb-1.5">
-                                    <p className="font-semibold text-base text-gray-900 dark:text-white truncate">
+                                    <p className="font-semibold text-base text-text truncate">
                                       {item.brand} {item.model}
                                     </p>
                                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
                                       item.quantity === 0
-                                        ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                                        : 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'
+                                        ? 'bg-danger/20 text-danger border border-danger/30'
+                                        : 'bg-warning/20 text-warning border border-warning/30'
                                     }`}>
                                       {item.quantity === 0 ? 'OUT OF STOCK' : `${item.quantity} left`}
                                     </span>
                                   </div>
-                                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                                  <p className="text-sm text-text-muted mb-1">
                                     Size: {item.size}
                                   </p>
-                                  <div className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+                                  <div className="flex items-center gap-1.5 text-xs text-text-muted">
                                     <span className={`w-1.5 h-1.5 rounded-full ${
-                                      item.quantity === 0 ? 'bg-red-500' : 'bg-orange-500'
+                                      item.quantity === 0 ? 'bg-danger' : 'bg-warning'
                                     } animate-pulse`}></span>
                                     {item.quantity === 0 ? 'Restock immediately' : 'Low stock alert'}
                                   </div>
@@ -512,29 +532,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
 
               {/* User Menu */}
-              <div className="relative pl-4 border-l border-gray-200 dark:border-gray-700" ref={userMenuRef}>
+              <div className="relative pl-4 border-l border-border-muted" ref={userMenuRef}>
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className="flex items-center gap-2 p-2 rounded-lg text-text-muted hover:bg-bg-light transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
                     <User size={18} className="text-white" />
                   </div>
-                  <span className="font-medium dark:text-white hidden sm:inline">
+                  <span className="font-medium text-text hidden sm:inline">
                     {userEmail ? userEmail.split('@')[0] : 'Admin'}
                   </span>
                 </button>
 
                 {/* Dropdown Menu */}
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
-                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-medium dark:text-white">Signed in as</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate">{userEmail}</p>
+                  <div className="absolute right-0 mt-2 w-64 bg-bg rounded-lg shadow-lg border border-border-muted py-2 z-50">
+                    <div className="px-4 py-3 border-b border-border-muted">
+                      <p className="text-sm font-medium text-text">Signed in as</p>
+                      <p className="text-sm text-text-muted truncate">{userEmail}</p>
                     </div>
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-red-600 dark:text-red-400"
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg-light transition-colors text-danger"
                     >
                       <LogOut size={18} />
                       <span className="font-medium">Sign Out</span>

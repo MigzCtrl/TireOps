@@ -28,15 +28,19 @@ export async function proxy(request: NextRequest) {
   );
 
   // Refresh session if expired - required for Server Components
+  // IMPORTANT: Must call getSession() to automatically refresh the session
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  // Protected routes - redirect to login if not authenticated
-  const protectedPaths = ['/', '/customers', '/inventory', '/work-orders', '/analytics'];
-  const isProtectedPath = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path));
+  const user = session?.user ?? null;
 
-  if (!user && isProtectedPath && request.nextUrl.pathname !== '/login') {
+  // Public routes that don't require authentication
+  const publicPaths = ['/login', '/register', '/signup'];
+  const isPublicPath = publicPaths.some(path => request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(path + '/'));
+
+  // Redirect to login if not authenticated and not on a public path
+  if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

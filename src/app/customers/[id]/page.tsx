@@ -3,10 +3,16 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { useParams } from 'next/navigation';
-import { User, Mail, Phone, MapPin, Calendar, DollarSign, ClipboardList, ArrowLeft, Edit, Trash2 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { User, Mail, Phone, MapPin, Calendar, DollarSign, ClipboardList, ArrowLeft, Edit, Trash2, Plus, ChevronRight, TrendingUp, Clock } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { formatTime } from '@/lib/utils';
 
 interface Customer {
   id: string;
@@ -21,6 +27,7 @@ interface WorkOrder {
   id: string;
   service_type: string;
   scheduled_date: string;
+  scheduled_time: string | null;
   status: string;
   total_amount: number | null;
   notes: string;
@@ -29,6 +36,8 @@ interface WorkOrder {
 
 export default function CustomerDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
   const customerId = params.id as string;
 
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -37,6 +46,7 @@ export default function CustomerDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedCustomer, setEditedCustomer] = useState<Customer | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const supabase = createClient();
 
@@ -77,20 +87,42 @@ export default function CustomerDetailPage() {
       setWorkOrders(ordersWithTireInfo);
     } catch (error) {
       console.error('Error loading customer data:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load customer data",
+      });
     } finally {
       setLoading(false);
     }
   }
 
-  const totalSpent = workOrders
-    .filter((order) => order.status === 'completed' && order.total_amount)
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const completedOrders = workOrders.filter((o) => o.status === 'completed');
+  const totalSpent = completedOrders
     .reduce((sum, order) => sum + (order.total_amount || 0), 0);
 
+  const avgOrderValue = completedOrders.length > 0
+    ? totalSpent / completedOrders.length
+    : 0;
+
+  const lastVisit = workOrders.length > 0
+    ? new Date(workOrders[0].scheduled_date)
+    : null;
+
   const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
+    pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800',
+    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    completed: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 border-green-200 dark:border-green-800',
+    cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 border-red-200 dark:border-red-800',
   };
 
   const handleEditClick = () => {
@@ -121,9 +153,17 @@ export default function CustomerDetailPage() {
 
       setCustomer(editedCustomer);
       setIsEditing(false);
+      toast({
+        title: "Success!",
+        description: "Customer updated successfully",
+      });
     } catch (error) {
       console.error('Error updating customer:', error);
-      alert('Failed to update customer');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update customer",
+      });
     }
   };
 
@@ -136,10 +176,21 @@ export default function CustomerDetailPage() {
 
       if (error) throw error;
 
-      window.location.href = '/customers';
+      toast({
+        title: "Success!",
+        description: "Customer deleted successfully",
+      });
+
+      setTimeout(() => {
+        router.push('/customers');
+      }, 1000);
     } catch (error) {
       console.error('Error deleting customer:', error);
-      alert('Failed to delete customer');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete customer",
+      });
     }
   };
 
@@ -151,6 +202,10 @@ export default function CustomerDetailPage() {
       });
     }
   };
+
+  const filteredOrders = statusFilter === 'all'
+    ? workOrders
+    : workOrders.filter(order => order.status === statusFilter);
 
   if (loading) {
     return (
@@ -175,8 +230,21 @@ export default function CustomerDetailPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div>
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <Link href="/" className="hover:text-blue-600 dark:hover:text-blue-400">
+            Home
+          </Link>
+          <ChevronRight size={16} />
+          <Link href="/customers" className="hover:text-blue-600 dark:hover:text-blue-400">
+            Customers
+          </Link>
+          <ChevronRight size={16} />
+          <span className="text-gray-900 dark:text-white font-medium">{customer.name}</span>
+        </div>
+
+        {/* Header with Avatar */}
+        <div className="card-glass p-6">
           <Link
             href="/customers"
             className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:underline mb-4"
@@ -184,154 +252,99 @@ export default function CustomerDetailPage() {
             <ArrowLeft size={20} />
             Back to Customers
           </Link>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-2">
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-                <User className="text-white" size={32} />
+              {/* Customer Avatar with Initials */}
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                <span className="text-2xl font-bold text-white">
+                  {getInitials(customer.name)}
+                </span>
               </div>
               <div>
                 <h1 className="text-3xl font-bold dark:text-white">{customer.name}</h1>
-                <p className="text-gray-600 dark:text-gray-400">Customer Details & History</p>
+                <p className="text-gray-600 dark:text-gray-400">Customer Profile</p>
               </div>
             </div>
+
             <div className="flex gap-2 w-full sm:w-auto">
-              <button
-                onClick={handleEditClick}
-                className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <Edit size={18} />
+              <Button onClick={handleEditClick} variant="default" className="flex-1 sm:flex-none">
+                <Edit size={18} className="mr-2" />
                 Edit
-              </button>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="flex-1 sm:flex-none px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <Trash2 size={18} />
+              </Button>
+              <Button onClick={() => setShowDeleteModal(true)} variant="destructive" className="flex-1 sm:flex-none">
+                <Trash2 size={18} className="mr-2" />
                 Delete
-              </button>
+              </Button>
             </div>
           </div>
         </div>
 
-        {/* Customer Info Card */}
+        {/* Contact Information Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-6 border border-gray-200 dark:border-gray-700"
+          transition={{ delay: 0.4 }}
+          className="card-glass p-6"
         >
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 rounded-lg bg-blue-500/20">
+              <User className="text-blue-400" size={20} />
+            </div>
             <h2 className="text-xl font-semibold dark:text-white">Contact Information</h2>
-            {isEditing && (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSaveEdit}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={handleCancelEdit}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Name Field */}
-            {isEditing && (
-              <div className="flex items-start gap-3 md:col-span-2">
-                <User className="text-purple-600 mt-1" size={20} />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Name</p>
-                  <input
-                    type="text"
-                    value={editedCustomer?.name || ''}
-                    onChange={(e) => handleInputChange('name', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            )}
 
-            {/* Email Field */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Email */}
             <div className="flex items-start gap-3">
-              <Mail className="text-blue-600 mt-1" size={20} />
+              <Mail className="text-blue-400 mt-1" size={20} />
               <div className="flex-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Email</p>
-                {isEditing ? (
-                  <input
-                    type="email"
-                    value={editedCustomer?.email || ''}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium dark:text-white">{customer.email || 'Not provided'}</p>
-                    {customer.email && (
-                      <a
-                        href={`mailto:${customer.email}`}
-                        className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                      >
-                        Email
-                      </a>
-                    )}
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <p className="font-medium dark:text-white">{customer.email || 'Not provided'}</p>
+                  {customer.email && (
+                    <a
+                      href={`mailto:${customer.email}`}
+                      className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      <Mail size={16} />
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Phone Field */}
+            {/* Phone */}
             <div className="flex items-start gap-3">
-              <Phone className="text-green-600 mt-1" size={20} />
+              <Phone className="text-green-400 mt-1" size={20} />
               <div className="flex-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Phone</p>
-                {isEditing ? (
-                  <input
-                    type="tel"
-                    value={editedCustomer?.phone || ''}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium dark:text-white">{customer.phone}</p>
-                    <a
-                      href={`tel:${customer.phone}`}
-                      className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
-                    >
-                      Call
-                    </a>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <p className="font-medium dark:text-white">{customer.phone}</p>
+                  <a
+                    href={`tel:${customer.phone}`}
+                    className="text-green-600 dark:text-green-400 hover:underline cursor-pointer"
+                  >
+                    <Phone size={16} />
+                  </a>
+                </div>
               </div>
             </div>
 
-            {/* Address Field */}
+            {/* Address */}
             <div className="flex items-start gap-3 md:col-span-2">
-              <MapPin className="text-red-600 mt-1" size={20} />
+              <MapPin className="text-red-400 mt-1" size={20} />
               <div className="flex-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Address</p>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editedCustomer?.address || ''}
-                    onChange={(e) => handleInputChange('address', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                ) : (
-                  <p className="font-medium dark:text-white">{customer.address || 'Not provided'}</p>
-                )}
+                <p className="font-medium dark:text-white">{customer.address || 'Not provided'}</p>
               </div>
             </div>
 
-            {/* Customer Since (Read-only) */}
+            {/* Customer Since */}
             <div className="flex items-start gap-3">
-              <Calendar className="text-purple-600 mt-1" size={20} />
+              <Calendar className="text-purple-400 mt-1" size={20} />
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Customer Since</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Customer Since</p>
                 <p className="font-medium dark:text-white">
                   {new Date(customer.created_at).toLocaleDateString()}
                 </p>
@@ -340,165 +353,272 @@ export default function CustomerDetailPage() {
           </div>
         </motion.div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total Orders</p>
-              <ClipboardList className="text-blue-600" size={20} />
-            </div>
-            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{workOrders.length}</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600 dark:text-gray-400">Completed Orders</p>
-              <ClipboardList className="text-green-600" size={20} />
-            </div>
-            <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {workOrders.filter((o) => o.status === 'completed').length}
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total Spent</p>
-              <DollarSign className="text-purple-600" size={20} />
-            </div>
-            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-              ${totalSpent.toFixed(2)}
-            </p>
-          </motion.div>
-        </div>
-
-        {/* Work Orders History */}
+        {/* Compact Stats Grid */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-6 border border-gray-200 dark:border-gray-700"
+          transition={{ delay: 0.5 }}
+          className="grid grid-cols-2 sm:grid-cols-4 gap-3"
         >
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-            <h2 className="text-xl font-semibold dark:text-white">Work Order History</h2>
-            <Link
-              href="/work-orders"
-              className="w-full sm:w-auto text-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-            >
-              + New Order
+          <div className="stats-card p-3 flex flex-col items-center text-center">
+            <div className="p-2 rounded-lg bg-blue-500/20 mb-2">
+              <ClipboardList className="text-blue-500" size={18} />
+            </div>
+            <p className="text-2xl stat-number font-bold text-gray-900 dark:text-white mb-1">{workOrders.length}</p>
+            <p className="text-xs stat-label text-gray-600 dark:text-gray-400 uppercase tracking-wider">Total Orders</p>
+          </div>
+
+          <div className="stats-card p-3 flex flex-col items-center text-center">
+            <div className="p-2 rounded-lg bg-green-500/20 mb-2">
+              <DollarSign className="text-green-500" size={18} />
+            </div>
+            <p className="text-2xl stat-number font-bold text-gray-900 dark:text-white mb-1">${totalSpent.toFixed(2)}</p>
+            <p className="text-xs stat-label text-gray-600 dark:text-gray-400 uppercase tracking-wider">Total Revenue</p>
+          </div>
+
+          <div className="stats-card p-3 flex flex-col items-center text-center">
+            <div className="p-2 rounded-lg bg-purple-500/20 mb-2">
+              <TrendingUp className="text-purple-500" size={18} />
+            </div>
+            <p className="text-2xl stat-number font-bold text-gray-900 dark:text-white mb-1">${avgOrderValue.toFixed(2)}</p>
+            <p className="text-xs stat-label text-gray-600 dark:text-gray-400 uppercase tracking-wider">Avg Order Value</p>
+          </div>
+
+          <div className="stats-card p-3 flex flex-col items-center text-center">
+            <div className="p-2 rounded-lg bg-pink-500/20 mb-2">
+              <Clock className="text-pink-500" size={18} />
+            </div>
+            <p className="text-base stat-number font-bold text-gray-900 dark:text-white mb-1">
+              {lastVisit ? lastVisit.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Never'}
+            </p>
+            <p className="text-xs stat-label text-gray-600 dark:text-gray-400 uppercase tracking-wider">Last Visit</p>
+          </div>
+        </motion.div>
+
+        {/* Work Orders Timeline */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="card-glass p-6"
+        >
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-blue-500/20">
+                <ClipboardList className="text-blue-400" size={20} />
+              </div>
+              <h2 className="text-xl font-semibold dark:text-white">Work Order History</h2>
+            </div>
+            <Link href="/work-orders">
+              <Button>
+                <Plus size={18} className="mr-2" />
+                New Order
+              </Button>
             </Link>
           </div>
 
-          {workOrders.length === 0 ? (
+          {/* Status Filter */}
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+            {['all', 'pending', 'in_progress', 'completed', 'cancelled'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+                  statusFilter === status
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                }`}
+              >
+                {status === 'all' ? 'All' : status.replace('_', ' ')}
+                {status !== 'all' && (
+                  <span className="ml-2 text-xs opacity-75">
+                    ({workOrders.filter(o => o.status === status).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {filteredOrders.length === 0 ? (
             <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-              No work orders yet for this customer
+              {statusFilter === 'all'
+                ? 'No work orders yet for this customer'
+                : `No ${statusFilter.replace('_', ' ')} orders`}
             </p>
           ) : (
-            <div className="space-y-4">
-              {workOrders.map((order, index) => (
-                <motion.div
-                  key={order.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + index * 0.1 }}
-                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 hover:shadow-lg dark:hover:bg-gray-700/50 transition-all"
-                >
-                  <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-2">
-                    <div>
-                      <h3 className="font-semibold text-lg dark:text-white">{order.service_type}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{order.tire_info}</p>
-                    </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                        statusColors[order.status as keyof typeof statusColors]
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                  </div>
+            <div className="relative">
+              {/* Timeline line */}
+              <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500"></div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm">
-                    <div>
-                      <p className="text-gray-600 dark:text-gray-400">Scheduled Date</p>
-                      <p className="font-medium dark:text-white">
-                        {new Date(order.scheduled_date).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 dark:text-gray-400">Amount</p>
-                      <p className="font-medium dark:text-white">
-                        {order.total_amount
-                          ? `$${order.total_amount.toFixed(2)}`
-                          : 'Not set'}
-                      </p>
-                    </div>
-                    {order.notes && (
-                      <div className="col-span-1 sm:col-span-2">
-                        <p className="text-gray-600 dark:text-gray-400">Notes</p>
-                        <p className="font-medium dark:text-white">{order.notes}</p>
+              <div className="space-y-6">
+                {filteredOrders.map((order, index) => (
+                  <Link key={order.id} href={`/work-orders`}>
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="relative pl-12 cursor-pointer group"
+                    >
+                      {/* Timeline dot */}
+                      <div className={`absolute left-0 w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                        order.status === 'completed'
+                          ? 'bg-green-500 border-green-400'
+                          : order.status === 'in_progress'
+                          ? 'bg-blue-500 border-blue-400'
+                          : order.status === 'pending'
+                          ? 'bg-yellow-500 border-yellow-400'
+                          : 'bg-red-500 border-red-400'
+                      }`}>
+                        <ClipboardList size={14} className="text-white" />
                       </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+
+                      {/* Order Card */}
+                      <div className="bg-white/5 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200/20 dark:border-gray-700/50 hover:bg-white/10 dark:hover:bg-gray-800/70 transition-all group-hover:shadow-lg">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-3">
+                          <div>
+                            <h3 className="font-semibold text-lg dark:text-white">{order.service_type}</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{order.tire_info}</p>
+                          </div>
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border ${
+                              statusColors[order.status as keyof typeof statusColors]
+                            }`}
+                          >
+                            {order.status.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                          <div>
+                            <p className="text-gray-600 dark:text-gray-400 text-xs mb-1">Date</p>
+                            <p className="font-medium dark:text-white">
+                              {new Date(order.scheduled_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                          {order.scheduled_time && (
+                            <div>
+                              <p className="text-gray-600 dark:text-gray-400 text-xs mb-1">Time</p>
+                              <p className="font-medium dark:text-white">{formatTime(order.scheduled_time)}</p>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-gray-600 dark:text-gray-400 text-xs mb-1">Amount</p>
+                            <p className="font-medium dark:text-white">
+                              {order.total_amount ? `$${order.total_amount.toFixed(2)}` : 'Not set'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {order.notes && (
+                          <div className="mt-3 pt-3 border-t border-gray-200/20 dark:border-gray-700/50">
+                            <p className="text-gray-600 dark:text-gray-400 text-xs mb-1">Notes</p>
+                            <p className="text-sm dark:text-white">{order.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
         </motion.div>
 
-        {/* Delete Confirmation Modal */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                  <Trash2 className="text-red-600 dark:text-red-400" size={24} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold dark:text-white">Delete Customer</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">This action cannot be undone</p>
-                </div>
+        {/* Edit Dialog */}
+        <Dialog open={isEditing} onOpenChange={setIsEditing}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Edit Customer</DialogTitle>
+              <DialogDescription>
+                Update customer information.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Name *</Label>
+                <Input
+                  id="edit-name"
+                  value={editedCustomer?.name || ''}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editedCustomer?.email || ''}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Phone *</Label>
+                <Input
+                  id="edit-phone"
+                  type="tel"
+                  value={editedCustomer?.phone || ''}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-address">Address</Label>
+                <Input
+                  id="edit-address"
+                  value={editedCustomer?.address || ''}
+                  onChange={(e) => handleInputChange('address', e.target.value)}
+                />
+              </div>
+              <div className="flex gap-3 justify-end pt-4">
+                <Button variant="outline" onClick={handleCancelEdit}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveEdit}>
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-              <p className="text-gray-700 dark:text-gray-300 mb-6">
-                Are you sure you want to delete <span className="font-semibold">{customer.name}</span>?
-                This will permanently remove the customer and all associated data.
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/20">
+                  <Trash2 size={20} className="text-red-600 dark:text-red-400" />
+                </div>
+                Delete Customer?
+              </DialogTitle>
+              <DialogDescription>
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                This action cannot be undone. This will permanently delete{' '}
+                <span className="font-semibold text-gray-900 dark:text-white">{customer.name}</span>{' '}
+                and all associated data.
               </p>
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
                   onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  className="flex-1"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="destructive"
                   onClick={handleDeleteCustomer}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  className="flex-1"
                 >
                   Delete Customer
-                </button>
+                </Button>
               </div>
-            </motion.div>
-          </div>
-        )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

@@ -131,20 +131,20 @@ export default function CustomSelect({
         width: dropdownPosition.width,
         zIndex: 10000,
       }}
-      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-700 shadow-2xl overflow-hidden"
+      className="bg-bg-light rounded-lg border border-border-muted shadow-2xl overflow-hidden"
     >
       {/* Search Input */}
       {searchable && (
-        <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="p-2 border-b border-border-muted">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search..."
-              className="w-full h-8 pl-7 pr-2 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white text-xs placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full h-8 pl-7 pr-2 rounded border border-border-muted bg-bg-light text-text text-xs placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
             />
           </div>
         </div>
@@ -153,15 +153,17 @@ export default function CustomSelect({
       {/* Options List */}
       <div className="max-h-64 overflow-y-auto p-1">
         {filteredOptions.length === 0 ? (
-          <div className="px-3 py-6 text-center text-xs text-gray-500 dark:text-gray-400">
+          <div className="px-3 py-6 text-center text-xs text-text-muted">
             No options found
           </div>
         ) : (
           filteredOptions.map((option, index) => (
             <button
-              key={option}
+              key={option || `empty-${index}`}
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 onChange(option);
                 setIsOpen(false);
                 setSearchQuery('');
@@ -170,14 +172,14 @@ export default function CustomSelect({
               onMouseEnter={() => setHighlightedIndex(index)}
               className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors rounded-md ${
                 index === highlightedIndex
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  ? 'bg-bg text-text'
+                  : 'text-text hover:bg-bg'
               } ${
                 index !== filteredOptions.length - 1 ? 'mb-1' : ''
               }`}
             >
-              <span>{option}</span>
-              {value === option && <Check size={14} className="text-blue-600 dark:text-blue-400" />}
+              <span>{option || '(Clear)'}</span>
+              {value === option && <Check size={14} className="text-primary" />}
             </button>
           ))
         )}
@@ -191,14 +193,14 @@ export default function CustomSelect({
         ref={triggerRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white flex items-center justify-between gap-2 hover:border-gray-400 dark:hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${className}`}
+        className={`w-full h-11 px-3 rounded-lg border border-border-muted bg-bg-light text-text flex items-center justify-between gap-2 hover:bg-bg transition-colors focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent ${className}`}
       >
-        <span className={`flex-1 text-left text-xs truncate ${!hasValue ? 'text-gray-500 dark:text-gray-400' : ''}`}>
+        <span className={`flex-1 text-left text-xs truncate ${!hasValue ? 'text-text-muted' : ''}`}>
           {displayValue}
         </span>
         <ChevronDown
           size={16}
-          className={`text-gray-500 dark:text-gray-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`text-text-muted flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 

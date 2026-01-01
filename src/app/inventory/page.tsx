@@ -1,14 +1,22 @@
 'use client';
 
-import { useEffect, useState, Suspense, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Package, Plus, Search, Download, Trash2, Edit, Check, Loader2, X } from 'lucide-react';
+import {
+  Package, Plus, Search, Download, Trash2, Edit, Check, Loader2,
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
+  Minus, History
+} from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
-import Stepper from '@/components/Stepper';
-import Dropdown, { type DropdownOption } from '@/components/Dropdown';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Tire {
   id: string;
@@ -21,8 +29,13 @@ interface Tire {
   created_at: string;
 }
 
+type SortField = 'brand' | 'model' | 'size' | 'quantity' | 'price';
+type SortDirection = 'asc' | 'desc';
+
 export default function InventoryPage() {
+  const { profile, isOwner, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [inventory, setInventory] = useState<Tire[]>([]);
   const [filteredInventory, setFilteredInventory] = useState<Tire[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +46,11 @@ export default function InventoryPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletingTire, setDeletingTire] = useState<Tire | null>(null);
   const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle');
+  const [sortField, setSortField] = useState<SortField>('brand');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const [formData, setFormData] = useState({
     brand: '',
     model: '',
@@ -42,24 +60,14 @@ export default function InventoryPage() {
     description: '',
   });
 
-  const modalRef = useRef<HTMLDivElement>(null);
-
-
   const supabase = createClient();
 
-  const stockFilterOptions: DropdownOption[] = [
-    { value: 'all', label: 'All Stock Levels', description: 'Show all items' },
-    { value: 'in-stock', label: 'In Stock', description: 'Items with quantity > 0' },
-    { value: 'low-stock', label: 'Low Stock', description: 'Items with 1-9 units' },
-    { value: 'out-of-stock', label: 'Out of Stock', description: 'Items with 0 units' },
-  ];
-
   useEffect(() => {
+    if (!profile?.shop_id) return;
     loadInventory();
-  }, []);
+  }, [profile?.shop_id]);
 
   useEffect(() => {
-    // Check for search parameter in URL
     const urlSearch = searchParams.get('search');
     if (urlSearch) {
       setSearchTerm(urlSearch);
@@ -67,9 +75,15 @@ export default function InventoryPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    const urlStockFilter = searchParams.get('stock');
+    if (urlStockFilter && ['all', 'in-stock', 'low-stock', 'out-of-stock'].includes(urlStockFilter)) {
+      setStockFilter(urlStockFilter);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     let filtered = inventory;
 
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(
         (tire) =>
@@ -79,7 +93,6 @@ export default function InventoryPage() {
       );
     }
 
-    // Apply stock filter
     if (stockFilter === 'in-stock') {
       filtered = filtered.filter((tire) => tire.quantity > 0);
     } else if (stockFilter === 'low-stock') {
@@ -88,37 +101,36 @@ export default function InventoryPage() {
       filtered = filtered.filter((tire) => tire.quantity === 0);
     }
 
+    // Sort
+    filtered = [...filtered].sort((a, b) => {
+      const aVal = a[sortField];
+      const bVal = b[sortField];
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDirection === 'asc'
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      }
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      return 0;
+    });
+
     setFilteredInventory(filtered);
-  }, [searchTerm, stockFilter, inventory]);
-
-  useEffect(() => {
-    if (showForm) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showForm]);
-
-
-  useEffect(() => {
-    if (showForm) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showForm]);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [searchTerm, stockFilter, inventory, sortField, sortDirection]);
 
   async function loadInventory() {
+    if (!profile?.shop_id) return;
+
     try {
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
+        .eq('shop_id', profile.shop_id)
         .order('brand', { ascending: true });
 
       if (error) throw error;
@@ -126,6 +138,11 @@ export default function InventoryPage() {
       setFilteredInventory(data || []);
     } catch (error) {
       console.error('Error loading inventory:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load inventory",
+      });
     } finally {
       setLoading(false);
     }
@@ -138,11 +155,26 @@ export default function InventoryPage() {
         const { error } = await supabase
           .from('inventory')
           .update(formData)
-          .eq('id', editingTireId);
+          .eq('id', editingTireId)
+          .eq('shop_id', profile.shop_id);
         if (error) throw error;
+
+        toast({
+          title: "Success!",
+          description: "Tire updated successfully",
+        });
       } else {
-        const { error } = await supabase.from('inventory').insert([formData]);
+        const tireData = {
+          ...formData,
+          shop_id: profile.shop_id,
+        };
+        const { error } = await supabase.from('inventory').insert([tireData]);
         if (error) throw error;
+
+        toast({
+          title: "Success!",
+          description: "Tire added successfully",
+        });
       }
 
       setEditingTireId(null);
@@ -158,7 +190,11 @@ export default function InventoryPage() {
       loadInventory();
     } catch (error) {
       console.error(`Error ${editingTireId ? 'updating' : 'adding'} tire:`, error);
-      alert(`Error ${editingTireId ? 'updating' : 'adding'} tire`);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to ${editingTireId ? 'update' : 'add'} tire`,
+      });
     }
   }
 
@@ -176,14 +212,27 @@ export default function InventoryPage() {
     if (!deleteConfirmId) return;
 
     try {
-      const { error } = await supabase.from('inventory').delete().eq('id', deleteConfirmId);
+      const { error } = await supabase
+        .from('inventory')
+        .delete()
+        .eq('id', deleteConfirmId)
+        .eq('shop_id', profile.shop_id);
 
       if (error) throw error;
+
+      toast({
+        title: "Success!",
+        description: "Tire deleted successfully",
+      });
       loadInventory();
       cancelDelete();
     } catch (error) {
       console.error('Error deleting tire:', error);
-      alert('Error deleting tire');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete tire",
+      });
     }
   }
 
@@ -194,13 +243,23 @@ export default function InventoryPage() {
       const { error } = await supabase
         .from('inventory')
         .update({ quantity: newQuantity })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('shop_id', profile.shop_id);
 
       if (error) throw error;
       loadInventory();
+
+      toast({
+        title: "Updated",
+        description: "Stock quantity updated",
+      });
     } catch (error) {
       console.error('Error updating quantity:', error);
-      alert('Error updating quantity');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update quantity",
+      });
     }
   }
 
@@ -217,42 +276,34 @@ export default function InventoryPage() {
     setShowForm(true);
   }
 
-  function cancelEditingTire() {
-    setEditingTireId(null);
-    setShowForm(false);
-    setFormData({
-      brand: '',
-      model: '',
-      size: '',
-      quantity: 0,
-      price: 0,
-      description: '',
-    });
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
   }
 
-  async function saveEditedTire(id: string) {
-    try {
-      const { error } = await supabase
-        .from('inventory')
-        .update(formData)
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setEditingTireId(null);
-      setShowForm(false);
-      setFormData({
-        brand: '',
-        model: '',
-        size: '',
-        quantity: 0,
-        price: 0,
-        description: '',
-      });
-      loadInventory();
-    } catch (error) {
-      console.error('Error updating tire:', error);
-      alert('Error updating tire');
+  function getStockBadge(quantity: number) {
+    if (quantity === 0) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-danger/20 text-danger border border-danger/30">
+          Out of Stock
+        </span>
+      );
+    } else if (quantity < 10) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary/20 text-secondary border border-secondary/30">
+          Low Stock
+        </span>
+      );
+    } else {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/20 text-success border border-success/30">
+          In Stock
+        </span>
+      );
     }
   }
 
@@ -264,7 +315,6 @@ export default function InventoryPage() {
   async function exportToCSV() {
     setExportStatus('exporting');
 
-    // Small delay to show the exporting state
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const headers = ['Brand', 'Model', 'Size', 'Quantity', 'Price', 'Description'];
@@ -292,7 +342,6 @@ export default function InventoryPage() {
     document.body.appendChild(link);
     link.click();
 
-    // Cleanup
     setTimeout(() => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
@@ -302,11 +351,41 @@ export default function InventoryPage() {
     setTimeout(() => setExportStatus('idle'), 2000);
   }
 
+  // Pagination
+  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+  const paginatedInventory = filteredInventory.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-xl text-text">Loading...</div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h2 className="text-xl font-bold text-text mb-2">Profile Not Found</h2>
+            <p className="text-text-muted">Please contact support to set up your shop profile.</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-xl dark:text-white">Loading...</div>
+          <div className="text-xl text-text">Loading...</div>
         </div>
       </DashboardLayout>
     );
@@ -314,430 +393,452 @@ export default function InventoryPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-4 lg:space-y-6">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl lg:text-3xl font-bold dark:text-white mb-2">Inventory</h1>
-            <p className="text-gray-600 dark:text-gray-400">
+            <h1 className="text-2xl font-bold text-text">Inventory</h1>
+            <p className="text-sm text-text-muted mt-1">
               Manage your tire inventory and stock levels
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+          <div className="flex gap-2">
             <button
               onClick={exportToCSV}
               disabled={exportStatus !== 'idle'}
-              className={`flex items-center gap-2 px-4 py-3 btn-glass text-white btn-press w-full sm:w-auto justify-center transition-all duration-300 ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 exportStatus === 'success'
-                  ? 'bg-green-500/20 border-green-500/50'
-                  : exportStatus === 'exporting'
-                  ? 'opacity-75 cursor-wait'
-                  : 'hover:glow-blue-hover'
+                  ? 'bg-success/20 text-text-muted'
+                  : 'bg-bg-light text-text hover:bg-highlight hover:text-text'
               }`}
             >
               {exportStatus === 'exporting' ? (
                 <>
-                  <Loader2 size={20} className="animate-spin" />
+                  <Loader2 size={16} className="animate-spin" />
                   Exporting...
                 </>
               ) : exportStatus === 'success' ? (
                 <>
-                  <Check size={20} className="text-green-400" />
+                  <Check size={16} className="text-success" />
                   Exported!
                 </>
               ) : (
                 <>
-                  <Download size={20} />
-                  Export CSV
+                  <Download size={16} />
+                  Export
                 </>
               )}
             </button>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-6 py-3 btn-glass-primary btn-press w-full sm:w-auto justify-center"
-            >
-              {showForm ? 'Cancel' : <><Plus size={20} /> Add Tire</>}
-            </button>
+
+            <Dialog open={showForm} onOpenChange={setShowForm}>
+              <DialogTrigger asChild>
+                <button
+                  disabled={!isOwner}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-light text-text hover:bg-highlight hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text"
+                >
+                  <Plus size={16} />
+                  Add Inventory
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingTireId ? 'Edit Tire' : 'Add New Tire'}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {editingTireId ? 'Update tire information in your inventory.' : 'Add a new tire to your inventory.'}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <form onSubmit={handleSubmit} className="space-y-6 pt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="brand">Brand *</Label>
+                      <Input
+                        id="brand"
+                        type="text"
+                        required
+                        value={formData.brand}
+                        onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                        placeholder="Michelin"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="model">Model *</Label>
+                      <Input
+                        id="model"
+                        type="text"
+                        required
+                        value={formData.model}
+                        onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                        placeholder="Pilot Sport 4"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="size">Size *</Label>
+                      <Input
+                        id="size"
+                        type="text"
+                        required
+                        value={formData.size}
+                        onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                        placeholder="225/45R17"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity">Quantity *</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        required
+                        min="0"
+                        value={formData.quantity}
+                        onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Price *</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        required
+                        min="0"
+                        step="0.01"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                        placeholder="99.99"
+                      />
+                    </div>
+
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="description">Description</Label>
+                      <textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        className="w-full h-24 px-3 py-2 rounded-lg border border-border-muted bg-bg-light text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                        rows={3}
+                        placeholder="Additional details about this tire..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 justify-end pt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowForm(false);
+                        setEditingTireId(null);
+                        setFormData({
+                          brand: '',
+                          model: '',
+                          size: '',
+                          quantity: 0,
+                          price: 0,
+                          description: '',
+                        });
+                      }}
+                      className="px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-danger hover:text-text-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors"
+                    >
+                      {editingTireId ? 'Update Tire' : 'Add Tire'}
+                    </button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="stats-card p-6"
-          >
-            <div className="flex flex-col items-center justify-center text-center space-y-2">
-              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Items</div>
-              <div className="text-5xl stat-number text-white font-bold">{inventory.length}</div>
-            </div>
-          </motion.div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-bg border border-border-muted rounded-lg p-6 text-center">
+            <p className="text-sm text-info uppercase tracking-wider mb-2">Total Items</p>
+            <p className="text-3xl font-bold text-text-muted">{inventory.length}</p>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="stats-card p-6"
-          >
-            <div className="flex flex-col items-center justify-center text-center space-y-2">
-              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Units</div>
-              <div className="text-5xl stat-number text-white font-bold">
-                {inventory.reduce((sum, item) => sum + item.quantity, 0)}
-              </div>
-            </div>
-          </motion.div>
+          <div className="bg-bg border border-border-muted rounded-lg p-6 text-center">
+            <p className="text-sm text-success uppercase tracking-wider mb-2">Total Units</p>
+            <p className="text-3xl font-bold text-text-muted">
+              {inventory.reduce((sum, item) => sum + item.quantity, 0)}
+            </p>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="stats-card p-6"
-          >
-            <div className="flex flex-col items-center justify-center text-center space-y-2">
-              <div className="text-sm stat-label text-blue-200 uppercase tracking-wider">Total Value</div>
-              <div className="text-5xl stat-number text-white font-bold">
-                ${totalValue.toFixed(2)}
-              </div>
-            </div>
-          </motion.div>
+          <div className="bg-bg border border-border-muted rounded-lg p-6 text-center">
+            <p className="text-sm text-warning uppercase tracking-wider mb-2">Total Value</p>
+            <p className="text-3xl font-bold text-text-muted">
+              ${totalValue.toFixed(2)}
+            </p>
+          </div>
         </div>
 
         {/* Search and Filter */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
+            <Input
               type="text"
               placeholder="Search by brand, model, or size..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-xl glass border border-gray-200/50 dark:border-gray-700/50 dark:text-white focus-premium transition-all duration-200"
+              className="pl-10 bg-bg-light border-border-muted"
             />
           </div>
-          <Dropdown
-            options={stockFilterOptions}
-            value={stockFilter}
-            onChange={setStockFilter}
-            placeholder="Filter by stock level"
-          />
+
+          <Select value={stockFilter} onValueChange={setStockFilter}>
+            <SelectTrigger className="bg-bg-light border-border-muted">
+              <SelectValue placeholder="Filter by stock level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stock Levels</SelectItem>
+              <SelectItem value="in-stock">In Stock</SelectItem>
+              <SelectItem value="low-stock">Low Stock (1-9 units)</SelectItem>
+              <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Form Modal */}
-        {showForm && typeof window !== 'undefined' && createPortal(
-          <AnimatePresence>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/75 backdrop-blur-md z-[9999]"
-              style={{ width: '100vw', height: '100vh' }}
-              onClick={() => {
-                setShowForm(false);
-                setEditingTireId(null);
-              }}
-              aria-hidden="true"
-            />
-
-            <div
-              className="fixed inset-0 overflow-y-auto pointer-events-none z-[10000]"
-              style={{ overscrollBehavior: 'contain', width: '100vw', height: '100vh' }}
-            >
-              <div className="min-h-full flex items-center justify-center p-6 pointer-events-none">
-                <div
-                  ref={modalRef}
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="modal-title"
-                  tabIndex={-1}
-                  className="pointer-events-auto w-[90vw] max-w-[1200px]"
-                  style={{ overflow: 'visible' }}
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setShowForm(false);
-                      setEditingTireId(null);
-                    }
-                  }}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden"
-                    style={{ maxHeight: '90vh' }}
-                  >
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-6 py-5 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
-                      <h2 id="modal-title" className="text-2xl font-semibold text-gray-900 dark:text-white">
-                        {editingTireId ? 'Edit Tire' : 'Add New Tire'}
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowForm(false);
-                          setEditingTireId(null);
-                        }}
-                        className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                      >
-                        <X size={20} className="text-gray-500 dark:text-gray-400" />
-                      </button>
-                    </div>
-
-                    {/* Form with scrollable content */}
-                    <form onSubmit={handleSubmit} className="flex flex-col p-6" style={{ maxHeight: 'calc(90vh - 100px)' }}>
-                      <div className="overflow-y-auto flex-1 space-y-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Brand *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={formData.brand}
-                              onChange={(e) =>
-                                setFormData({ ...formData, brand: e.target.value })
-                              }
-                              className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Model *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={formData.model}
-                              onChange={(e) =>
-                                setFormData({ ...formData, model: e.target.value })
-                              }
-                              className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Size *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="e.g., 225/45R17"
-                              value={formData.size}
-                              onChange={(e) =>
-                                setFormData({ ...formData, size: e.target.value })
-                              }
-                              className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Quantity *
-                            </label>
-                            <Stepper
-                              value={formData.quantity}
-                              onChange={(value) => setFormData({ ...formData, quantity: value })}
-                              min={0}
-                              className="justify-start"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Price *
-                            </label>
-                            <input
-                              type="number"
-                              required
-                              min="0"
-                              step="0.01"
-                              value={formData.price}
-                              onChange={(e) =>
-                                setFormData({ ...formData, price: parseFloat(e.target.value) })
-                              }
-                              className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                          </div>
-                          <div className="col-span-1 sm:col-span-2">
-                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                              Description
-                            </label>
-                            <textarea
-                              value={formData.description}
-                              onChange={(e) =>
-                                setFormData({ ...formData, description: e.target.value })
-                              }
-                              className="w-full h-24 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                              rows={3}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Fixed Button Row at Bottom */}
-                      <div className="flex gap-3 justify-end pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowForm(false);
-                            setEditingTireId(null);
-                            setFormData({
-                              brand: '',
-                              model: '',
-                              size: '',
-                              quantity: 0,
-                              price: 0,
-                              description: '',
-                            });
-                          }}
-                          className="px-6 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-750 transition-all text-sm font-medium"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all text-sm font-medium shadow-sm hover:shadow-md"
-                        >
-                          {editingTireId ? 'Update Tire' : 'Add Tire'}
-                        </button>
-                      </div>
-                    </form>
-                  </motion.div>
-                </div>
-              </div>
-            </div>
-          </AnimatePresence>,
-          document.body
-        )}
-
-
-        {/* Tire List */}
-        <div className="space-y-4">
+        {/* Table View */}
+        <div className="bg-bg border border-border-muted rounded-lg overflow-hidden">
           {filteredInventory.length === 0 ? (
-            <div className="card-glass p-8 text-center">
-              <p className="text-gray-500 dark:text-gray-400">
+            <div className="p-8 text-center">
+              <p className="text-text-muted">
                 {searchTerm || stockFilter !== 'all'
                   ? 'No tires match your filters'
-                  : 'No tires in inventory. Click "Add Tire" to get started.'}
+                  : 'No tires in inventory. Click "Add Inventory" to get started.'}
               </p>
             </div>
           ) : (
-            filteredInventory.map((tire, index) => (
-              <motion.div
-                key={tire.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="card-glass p-4 lg:p-6 lift-hover"
-              >
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-4 sm:gap-0">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold dark:text-white">
-                          {tire.brand} {tire.model}
-                        </h3>
-                        <p className="text-gray-600 dark:text-gray-400 mt-1">Size: {tire.size}</p>
-                        {tire.description && (
-                          <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">
-                            {tire.description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-left sm:text-right w-full sm:w-auto">
-                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                          ${tire.price.toFixed(2)}
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">per tire</p>
-                      </div>
-                    </div>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <span className="text-sm font-medium dark:text-gray-300">Quantity:</span>
-                    <Stepper
-                      value={tire.quantity}
-                      onChange={(newValue) => updateQuantity(tire.id, newValue)}
-                      min={0}
-                    />
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        tire.quantity === 0
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-                          : tire.quantity < 10
-                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'
-                          : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                      }`}
-                    >
-                      {tire.quantity === 0
-                        ? 'Out of Stock'
-                        : tire.quantity < 10
-                        ? 'Low Stock'
-                        : 'In Stock'}
-                    </span>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-bg-light border-b border-border-muted">
+                    <tr>
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => handleSort('brand')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Brand
+                          {sortField === 'brand' && (
+                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => handleSort('model')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Model
+                          {sortField === 'model' && (
+                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => handleSort('size')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Size
+                          {sortField === 'size' && (
+                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => handleSort('quantity')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Stock
+                          {sortField === 'quantity' && (
+                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => handleSort('price')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Price
+                          {sortField === 'price' && (
+                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                          )}
+                        </div>
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-text uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-bg divide-y divide-border-muted">
+                    {paginatedInventory.map((tire, index) => (
+                      <tr
+                        key={tire.id}
+                        className="hover:bg-bg-light transition-colors"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-text">
+                            {tire.brand}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-text">
+                            {tire.model}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-text-muted">
+                            {tire.size}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => updateQuantity(tire.id, tire.quantity - 1)}
+                                disabled={!isOwner || tire.quantity === 0}
+                                className="p-1 rounded hover:bg-bg-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <Minus size={14} className="text-text-muted" />
+                              </button>
+                              <span className="text-sm font-medium text-text w-8 text-center">
+                                {tire.quantity}
+                              </span>
+                              <button
+                                onClick={() => updateQuantity(tire.id, tire.quantity + 1)}
+                                disabled={!isOwner}
+                                className="p-1 rounded hover:bg-bg-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <Plus size={14} className="text-text-muted" />
+                              </button>
+                            </div>
+                            {getStockBadge(tire.quantity)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-text">
+                            ${tire.price.toFixed(2)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => startEditingTire(tire)}
+                              disabled={!isOwner}
+                              className="p-2 rounded-lg bg-bg-light text-text-muted hover:bg-info hover:text-text-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => confirmDelete(tire)}
+                              disabled={!isOwner}
+                              className="p-2 rounded-lg bg-bg-light text-text-muted hover:bg-danger hover:text-text-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 bg-bg-light border-t border-border-muted flex items-center justify-between">
+                  <div className="text-sm text-text-muted">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredInventory.length)} of {filteredInventory.length} items
                   </div>
-                  <div className="flex gap-2 w-full sm:w-auto justify-end">
-                    <button
-                      onClick={() => startEditingTire(tire)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                      title="Edit Tire"
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
                     >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={() => confirmDelete(tire)}
-                      className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      title="Delete"
+                      <ChevronLeft size={16} />
+                    </Button>
+                    <span className="text-sm text-text">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
                     >
-                      <Trash2 size={18} />
-                    </button>
+                      <ChevronRight size={16} />
+                    </Button>
                   </div>
                 </div>
-              </motion.div>
-            ))
+              )}
+            </>
           )}
         </div>
 
-        {/* Delete Confirmation Modal */}
+        {/* Delete Confirmation Dialog */}
         {deleteConfirmId && deletingTire && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="glass rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-200/50 dark:border-gray-700/50"
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/20">
-                  <Trash2 size={24} className="text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold dark:text-white">Delete Tire?</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">This action cannot be undone</p>
-                </div>
-              </div>
+          <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && cancelDelete()}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-danger/20">
+                    <Trash2 size={20} className="text-danger" />
+                  </div>
+                  Delete Tire?
+                </DialogTitle>
+                <DialogDescription>
+                  This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
 
-              <div className="glass rounded-lg p-4 mb-6 border border-gray-200/30 dark:border-gray-700/30">
-                <p className="font-semibold text-gray-900 dark:text-white mb-1">
-                  {deletingTire.brand} {deletingTire.model}
+              <div className="space-y-4">
+                <p className="text-sm text-text-muted">
+                  This action cannot be undone. This will permanently delete the tire from your inventory.
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Size: {deletingTire.size} • Quantity: {deletingTire.quantity}
-                </p>
-              </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={cancelDelete}
-                  className="flex-1 px-4 py-3 btn-glass text-gray-900 dark:text-white rounded-xl hover:bg-white/20 dark:hover:bg-gray-700/50 transition-all font-medium btn-press"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="flex-1 px-4 py-3 bg-red-600/90 backdrop-blur-xl border border-red-500/50 text-white rounded-xl hover:bg-red-700 hover:shadow-[0_0_30px_rgba(239,68,68,0.4)] transition-all font-medium btn-press"
-                >
-                  Delete
-                </button>
+                <div className="rounded-lg p-4 bg-bg-light border border-border-muted">
+                  <p className="font-semibold text-text mb-1">
+                    {deletingTire.brand} {deletingTire.model}
+                  </p>
+                  <p className="text-sm text-text-muted">
+                    Size: {deletingTire.size} • Quantity: {deletingTire.quantity}
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={cancelDelete}
+                    className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-danger hover:text-text-muted transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-            </motion.div>
-          </div>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
     </DashboardLayout>

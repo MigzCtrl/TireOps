@@ -66,9 +66,9 @@ export default function DateTimePicker({
     if (!timeStr) return 'Select time';
     const [hours, minutes] = timeStr.split(':');
     const h = parseInt(hours);
-    const ampm = h >= 12 ? 'PM' : 'AM';
+    const ampm = h >= 12 ? 'pm' : 'am';
     const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    return `${displayHour}:${minutes} ${ampm}`;
+    return `${displayHour}:${minutes}${ampm}`;
   };
 
   const handleDateSelect = (day: number, month: number, year: number) => {
@@ -144,7 +144,7 @@ export default function DateTimePicker({
   return (
     <div>
       {label && (
-        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+        <label className="block text-xs font-medium text-text-muted mb-2 uppercase tracking-wide">
           {label}
         </label>
       )}
@@ -157,9 +157,9 @@ export default function DateTimePicker({
               setShowCalendar(!showCalendar);
               setShowTimePicker(false);
             }}
-            className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white flex items-center gap-2 hover:border-gray-400 dark:hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full h-11 px-3 rounded-lg border border-border-muted bg-bg-light text-text flex items-center gap-2 hover:bg-bg transition-colors focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
           >
-            <Calendar size={16} className="text-gray-500 dark:text-gray-400 flex-shrink-0" />
+            <Calendar size={16} className="text-text-muted flex-shrink-0" />
             <span className="flex-1 text-left text-xs">{formatDisplayDate(date)}</span>
           </button>
 
@@ -170,7 +170,8 @@ export default function DateTimePicker({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full left-0 right-0 mt-2 p-4 rounded-xl bg-gray-900/95 dark:bg-gray-800/95 backdrop-blur-xl border border-gray-700/50 shadow-2xl z-50"
+                className="absolute top-full left-0 right-0 mt-2 p-4 rounded-xl bg-bg-light backdrop-blur-xl border border-border-muted shadow-2xl z-50"
+                suppressHydrationWarning
               >
                 {/* Month Navigation */}
                 <div className="flex items-center justify-between mb-4">
@@ -181,11 +182,11 @@ export default function DateTimePicker({
                       newMonth.setMonth(newMonth.getMonth() - 1);
                       setCurrentMonth(newMonth);
                     }}
-                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all"
+                    className="p-2 rounded-lg bg-bg-light hover:bg-bg border border-border-muted transition-all"
                   >
-                    <ChevronLeft size={16} className="text-gray-300" />
+                    <ChevronLeft size={16} className="text-text-muted" />
                   </button>
-                  <h4 className="text-sm font-semibold text-white">
+                  <h4 className="text-sm font-semibold text-text">
                     {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </h4>
                   <button
@@ -195,16 +196,16 @@ export default function DateTimePicker({
                       newMonth.setMonth(newMonth.getMonth() + 1);
                       setCurrentMonth(newMonth);
                     }}
-                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all"
+                    className="p-2 rounded-lg bg-bg-light hover:bg-bg border border-border-muted transition-all"
                   >
-                    <ChevronRight size={16} className="text-gray-300" />
+                    <ChevronRight size={16} className="text-text-muted" />
                   </button>
                 </div>
 
                 {/* Calendar Grid */}
                 <div className="grid grid-cols-7 gap-1">
                   {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-                    <div key={day} className="text-center text-xs font-semibold text-gray-400 py-2">
+                    <div key={day} className="text-center text-xs font-semibold text-text-muted py-2">
                       {day}
                     </div>
                   ))}
@@ -227,12 +228,12 @@ export default function DateTimePicker({
                           key={day}
                           type="button"
                           onClick={() => handleDateSelect(day, month, year)}
-                          className={`aspect-square rounded-lg text-sm font-semibold transition-all duration-200 ${
+                          className={`aspect-square rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
                             selected
-                              ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/50'
+                              ? 'bg-bg-light text-text hover:bg-highlight hover:text-text'
                               : today
-                              ? 'bg-white/15 text-white ring-1 ring-blue-400/50'
-                              : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                              ? 'bg-info/20 text-text ring-1 ring-info hover:bg-highlight hover:text-text'
+                              : 'text-text hover:bg-highlight hover:text-text'
                           }`}
                         >
                           {day}
@@ -256,9 +257,9 @@ export default function DateTimePicker({
               setShowTimePicker(!showTimePicker);
               setShowCalendar(false);
             }}
-            className="w-full h-11 px-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white flex items-center gap-2 hover:border-gray-400 dark:hover:border-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full h-11 px-3 rounded-lg border border-border-muted bg-bg-light text-text flex items-center gap-2 hover:bg-bg transition-colors focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
           >
-            <Clock size={16} className="text-gray-500 dark:text-gray-400 flex-shrink-0" />
+            <Clock size={16} className="text-text-muted flex-shrink-0" />
             <span className="flex-1 text-left text-xs">{formatDisplayTime(time)}</span>
           </button>
 
@@ -269,7 +270,7 @@ export default function DateTimePicker({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full left-0 right-0 mt-2 rounded-xl bg-gray-900/95 dark:bg-gray-800/95 backdrop-blur-xl border border-gray-700/50 shadow-2xl z-50 max-h-64 overflow-y-auto"
+                className="absolute top-full left-0 right-0 mt-2 rounded-xl bg-bg-light backdrop-blur-xl border border-border-muted shadow-2xl z-50 max-h-64 overflow-y-auto"
               >
                 {(() => {
                   const timeOptions = generateTimeOptions();
@@ -287,10 +288,10 @@ export default function DateTimePicker({
                             onTimeChange(time);
                             setShowTimePicker(false);
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm transition-all border-b border-gray-700/50 bg-blue-500/20 text-blue-300 font-semibold flex items-center justify-between"
+                          className="w-full px-4 py-2.5 text-left text-sm transition-all border-b border-border-muted bg-primary/20 text-primary font-semibold flex items-center justify-between cursor-pointer hover:bg-highlight"
                         >
                           <span>{formatDisplayTime(time)}</span>
-                          <span className="text-xs text-yellow-400">(Outside hours)</span>
+                          <span className="text-xs text-warning">(Outside hours)</span>
                         </button>
                       )}
 
@@ -303,10 +304,10 @@ export default function DateTimePicker({
                             onTimeChange(timeOption);
                             setShowTimePicker(false);
                           }}
-                          className={`w-full px-4 py-2.5 text-left text-sm transition-all border-b border-gray-700/50 last:border-b-0 ${
+                          className={`w-full px-4 py-2.5 text-left text-sm transition-all border-b border-border-muted last:border-b-0 cursor-pointer ${
                             time === timeOption
-                              ? 'bg-blue-500/20 text-blue-300 font-semibold'
-                              : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                              ? 'bg-bg-light text-text hover:bg-highlight font-semibold'
+                              : 'text-text hover:bg-highlight'
                           }`}
                         >
                           {formatDisplayTime(timeOption)}
