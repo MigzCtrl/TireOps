@@ -159,6 +159,8 @@ export default function WorkOrdersPage() {
       return;
     }
 
+    if (!profile?.shop_id) return;
+
     try {
       const totalAmount = selectedTires.length > 0 ? calculateTotal() : null;
 
@@ -317,6 +319,8 @@ export default function WorkOrdersPage() {
   }
 
   async function updateStatus(id: string, newStatus: string) {
+    if (!profile?.shop_id) return;
+
     try {
       const { error } = await supabase
         .from('work_orders')
@@ -352,7 +356,7 @@ export default function WorkOrdersPage() {
   }
 
   async function confirmDelete() {
-    if (!orderToDelete) return;
+    if (!orderToDelete || !profile?.shop_id) return;
 
     try {
       const { error } = await supabase

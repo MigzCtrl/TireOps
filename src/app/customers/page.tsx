@@ -117,6 +117,8 @@ export default function CustomersPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!profile?.shop_id) return;
+
     try {
       if (editingId) {
         const { error } = await supabase
@@ -180,7 +182,7 @@ export default function CustomersPage() {
   }
 
   async function confirmDelete() {
-    if (!customerToDelete) return;
+    if (!customerToDelete || !profile?.shop_id) return;
 
     try {
       const { error } = await supabase

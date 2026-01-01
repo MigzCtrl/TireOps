@@ -150,6 +150,8 @@ export default function InventoryPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!profile?.shop_id) return;
+
     try {
       if (editingTireId) {
         const { error } = await supabase
@@ -209,7 +211,7 @@ export default function InventoryPage() {
   }
 
   async function handleDelete() {
-    if (!deleteConfirmId) return;
+    if (!deleteConfirmId || !profile?.shop_id) return;
 
     try {
       const { error } = await supabase
@@ -237,7 +239,7 @@ export default function InventoryPage() {
   }
 
   async function updateQuantity(id: string, newQuantity: number) {
-    if (newQuantity < 0) return;
+    if (newQuantity < 0 || !profile?.shop_id) return;
 
     try {
       const { error } = await supabase
