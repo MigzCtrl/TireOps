@@ -31,7 +31,7 @@ interface LowStockItem {
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { profile, shop } = useAuth();
+  const { user, profile, shop } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
@@ -39,7 +39,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
@@ -61,15 +60,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href);
   };
-
-  // Get current user
-  useEffect(() => {
-    async function getUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserEmail(user?.email || null);
-    }
-    getUser();
-  }, []);
 
   // Fetch low stock items
   useEffect(() => {
@@ -541,7 +531,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     <User size={18} className="text-white" />
                   </div>
                   <span className="font-medium text-text hidden sm:inline">
-                    {userEmail ? userEmail.split('@')[0] : 'Admin'}
+                    {profile?.full_name || user?.email?.split('@')[0] || shop?.name || 'User'}
                   </span>
                 </button>
 
@@ -550,7 +540,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <div className="absolute right-0 mt-2 w-64 bg-bg rounded-lg shadow-lg border border-border-muted py-2 z-50">
                     <div className="px-4 py-3 border-b border-border-muted">
                       <p className="text-sm font-medium text-text">Signed in as</p>
-                      <p className="text-sm text-text-muted truncate">{userEmail}</p>
+                      <p className="text-sm text-text-muted truncate">{user?.email || 'No email'}</p>
                     </div>
                     <button
                       onClick={handleLogout}
