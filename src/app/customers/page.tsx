@@ -124,9 +124,6 @@ export default function CustomersPage() {
       const validationResult = customerSchema.safeParse(sanitizedData);
 
       if (!validationResult.success) {
-        // Debug: log validation errors
-        console.error('Validation failed:', validationResult.error);
-
         // Show first validation error
         const firstError = validationResult.error.errors?.[0];
         toast({
