@@ -47,7 +47,7 @@ export default function InventoryPage() {
   const [sortField, setSortField] = useState<SortField>('brand');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const ITEMS_PER_PAGE = 10;
 
   const [formData, setFormData] = useState({
     brand: '',
@@ -63,6 +63,37 @@ export default function InventoryPage() {
   useEffect(() => {
     if (!profile?.shop_id) return;
     loadInventory();
+
+    // Real-time subscription for inventory changes
+    const inventoryChannel = supabase
+      .channel('inventory-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventory',
+          filter: `shop_id=eq.${profile.shop_id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setInventory(prev => prev.map(t =>
+              t.id === (payload.new as any).id
+                ? { ...t, ...(payload.new as any) }
+                : t
+            ));
+          } else if (payload.eventType === 'INSERT') {
+            setInventory(prev => [...prev, payload.new as any]);
+          } else if (payload.eventType === 'DELETE') {
+            setInventory(prev => prev.filter(t => t.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(inventoryChannel);
+    };
   }, [profile?.shop_id]);
 
   useEffect(() => {
@@ -338,10 +369,10 @@ export default function InventoryPage() {
   }
 
   // Pagination
-  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredInventory.length / ITEMS_PER_PAGE);
   const paginatedInventory = filteredInventory.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
   );
 
   if (authLoading) {
@@ -747,7 +778,7 @@ export default function InventoryPage() {
               {totalPages > 1 && (
                 <div className="px-6 py-4 bg-bg-light border-t border-border-muted flex items-center justify-between">
                   <div className="text-sm text-text-muted">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredInventory.length)} of {filteredInventory.length} items
+                    Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredInventory.length)} of {filteredInventory.length} items
                   </div>
                   <div className="flex items-center gap-2">
                     <Button

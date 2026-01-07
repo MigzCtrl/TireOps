@@ -106,9 +106,7 @@ export const workOrderSchema = z.object({
     .optional()
     .or(z.literal('')),
   status: z
-    .enum(['pending', 'in_progress', 'completed', 'cancelled'], {
-      errorMap: () => ({ message: 'Invalid status' }),
-    }),
+    .enum(['pending', 'in_progress', 'completed', 'cancelled'], { message: 'Invalid status' }),
 });
 
 export type WorkOrderFormData = z.infer<typeof workOrderSchema>;

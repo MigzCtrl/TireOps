@@ -311,7 +311,7 @@ export default function CustomerDetailPage() {
               <div className="flex-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Email</p>
                 <div className="flex items-center gap-2">
-                  <p className="font-medium dark:text-white">{customer.email || 'Not provided'}</p>
+                  <p className="font-medium text-text">{customer.email || 'Not provided'}</p>
                   {customer.email && (
                     <a
                       href={`mailto:${customer.email}`}
@@ -330,7 +330,7 @@ export default function CustomerDetailPage() {
               <div className="flex-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Phone</p>
                 <div className="flex items-center gap-2">
-                  <p className="font-medium dark:text-white">{customer.phone}</p>
+                  <p className="font-medium text-text">{customer.phone}</p>
                   <a
                     href={`tel:${customer.phone}`}
                     className="text-green-600 dark:text-green-400 hover:underline cursor-pointer"
@@ -346,7 +346,7 @@ export default function CustomerDetailPage() {
               <MapPin className="text-red-400 mt-1" size={20} />
               <div className="flex-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Address</p>
-                <p className="font-medium dark:text-white">{customer.address || 'Not provided'}</p>
+                <p className="font-medium text-text">{customer.address || 'Not provided'}</p>
               </div>
             </div>
 
@@ -355,7 +355,7 @@ export default function CustomerDetailPage() {
               <Calendar className="text-purple-400 mt-1" size={20} />
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Customer Since</p>
-                <p className="font-medium dark:text-white">
+                <p className="font-medium text-text">
                   {new Date(customer.created_at).toLocaleDateString()}
                 </p>
               </div>
@@ -483,11 +483,11 @@ export default function CustomerDetailPage() {
                       </div>
 
                       {/* Order Card */}
-                      <div className="bg-white/5 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200/20 dark:border-gray-700/50 hover:bg-white/10 dark:hover:bg-gray-800/70 transition-all group-hover:shadow-lg">
+                      <div className="bg-bg-light rounded-lg p-4 border border-border-muted hover:bg-bg transition-all group-hover:shadow-lg">
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-3">
                           <div>
-                            <h3 className="font-semibold text-lg dark:text-white">{order.service_type}</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">{order.tire_info}</p>
+                            <h3 className="font-semibold text-lg text-text">{order.service_type}</h3>
+                            <p className="text-sm text-text-muted">{order.tire_info}</p>
                           </div>
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border ${
@@ -500,29 +500,29 @@ export default function CustomerDetailPage() {
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                           <div>
-                            <p className="text-gray-600 dark:text-gray-400 text-xs mb-1">Date</p>
-                            <p className="font-medium dark:text-white">
+                            <p className="text-text-muted text-xs mb-1">Date</p>
+                            <p className="font-medium text-text">
                               {new Date(order.scheduled_date).toLocaleDateString()}
                             </p>
                           </div>
                           {order.scheduled_time && (
                             <div>
-                              <p className="text-gray-600 dark:text-gray-400 text-xs mb-1">Time</p>
-                              <p className="font-medium dark:text-white">{formatTime(order.scheduled_time)}</p>
+                              <p className="text-text-muted text-xs mb-1">Time</p>
+                              <p className="font-medium text-text">{formatTime(order.scheduled_time)}</p>
                             </div>
                           )}
                           <div>
-                            <p className="text-gray-600 dark:text-gray-400 text-xs mb-1">Amount</p>
-                            <p className="font-medium dark:text-white">
+                            <p className="text-text-muted text-xs mb-1">Amount</p>
+                            <p className="font-medium text-text">
                               {order.total_amount ? `$${order.total_amount.toFixed(2)}` : 'Not set'}
                             </p>
                           </div>
                         </div>
 
                         {order.notes && (
-                          <div className="mt-3 pt-3 border-t border-gray-200/20 dark:border-gray-700/50">
-                            <p className="text-gray-600 dark:text-gray-400 text-xs mb-1">Notes</p>
-                            <p className="text-sm dark:text-white">{order.notes}</p>
+                          <div className="mt-3 pt-3 border-t border-border-muted">
+                            <p className="text-text-muted text-xs mb-1">Notes</p>
+                            <p className="text-sm text-text">{order.notes}</p>
                           </div>
                         )}
                       </div>

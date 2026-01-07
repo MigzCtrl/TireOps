@@ -3,7 +3,7 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   Sun, Moon, Search, Bell, AlertTriangle,
-  Users, Package, ClipboardList, TrendingUp, Home, LogOut, User, Menu, X
+  Users, Package, ClipboardList, TrendingUp, Home, LogOut, User, Menu, X, Settings, Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -42,6 +42,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -54,6 +55,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { href: '/inventory', label: 'Inventory', icon: Package },
     { href: '/work-orders', label: 'Work Orders', icon: ClipboardList },
     { href: '/analytics', label: 'Analytics', icon: TrendingUp },
+    { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
   const isActive = (href: string) => {
@@ -61,17 +63,57 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return pathname.startsWith(href);
   };
 
+  // Load dismissed notifications from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('dismissedNotifications');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setDismissedNotifications(new Set(parsed));
+      } catch {
+        // Invalid data, ignore
+      }
+    }
+  }, []);
+
+  // Save dismissed notifications to localStorage
+  const saveDismissed = (newSet: Set<string>) => {
+    setDismissedNotifications(newSet);
+    localStorage.setItem('dismissedNotifications', JSON.stringify([...newSet]));
+  };
+
+  // Dismiss a single notification
+  const dismissNotification = (itemId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSet = new Set(dismissedNotifications);
+    newSet.add(itemId);
+    saveDismissed(newSet);
+  };
+
+  // Clear all notifications
+  const clearAllNotifications = () => {
+    const newSet = new Set(dismissedNotifications);
+    lowStockItems.forEach(item => newSet.add(item.id));
+    saveDismissed(newSet);
+  };
+
+  // Get visible (non-dismissed) low stock items
+  const visibleLowStockItems = lowStockItems.filter(item => !dismissedNotifications.has(item.id));
+
   // Fetch low stock items
   useEffect(() => {
     async function fetchLowStock() {
       if (!profile?.shop_id) return;
+
+      // Get threshold from shop settings
+      const threshold = shop?.low_stock_threshold ?? 5;
 
       try {
         const { data, error } = await supabase
           .from('inventory')
           .select('id, brand, model, size, quantity')
           .eq('shop_id', profile.shop_id)
-          .lt('quantity', 5)
+          .lt('quantity', threshold)
           .order('quantity', { ascending: true });
 
         if (error) {
@@ -94,7 +136,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // Refresh every 30 seconds
     const interval = setInterval(fetchLowStock, 30000);
     return () => clearInterval(interval);
-  }, [profile?.shop_id, supabase]);
+  }, [profile?.shop_id, shop?.low_stock_threshold, supabase]);
 
   // Handle logout
   async function handleLogout() {
@@ -408,9 +450,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   className="p-2 rounded-lg text-text-muted hover:bg-bg-light relative transition-colors"
                 >
                   <Bell size={20} />
-                  {lowStockItems.some(item => item.quantity === 0) ? (
+                  {visibleLowStockItems.some(item => item.quantity === 0) ? (
                     <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                  ) : lowStockItems.length > 0 ? (
+                  ) : visibleLowStockItems.length > 0 ? (
                     <span className="absolute top-1 right-1 w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
                   ) : null}
                 </button>
@@ -430,19 +472,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                           </div>
                           <h3 className="font-semibold text-lg text-text">Notifications</h3>
                         </div>
-                        {lowStockItems.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 text-xs font-semibold bg-danger text-danger-foreground rounded-full">
-                              {lowStockItems.length}
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {visibleLowStockItems.length > 0 && (
+                            <>
+                              <span className="px-3 py-1 text-xs font-semibold bg-danger text-danger-foreground rounded-full">
+                                {visibleLowStockItems.length}
+                              </span>
+                              <button
+                                onClick={clearAllNotifications}
+                                className="p-2 rounded-lg text-text-muted hover:bg-bg-light hover:text-danger transition-colors"
+                                title="Clear all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     {/* Notifications List */}
                     <div className="overflow-y-auto flex-1 p-3">
-                      {lowStockItems.length === 0 ? (
+                      {visibleLowStockItems.length === 0 ? (
                         <div className="px-6 py-16 text-center">
                           <p className="text-sm text-text-muted">
                             No notifications
@@ -450,18 +501,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {lowStockItems.map((item, index) => (
-                            <button
+                          {visibleLowStockItems.map((item, index) => (
+                            <div
                               key={item.id}
+                              className="relative w-full p-4 hover:bg-bg-light transition-all duration-300 text-left rounded-xl group border border-border-muted hover:border-warning/30 hover:shadow-md cursor-pointer"
+                              style={{
+                                animation: `slideIn 0.4s ease-out ${index * 0.06}s both`
+                              }}
                               onClick={() => {
                                 router.push('/inventory');
                                 setShowNotifications(false);
                               }}
-                              className="w-full p-4 hover:bg-bg-light transition-all duration-300 text-left rounded-xl group border border-border-muted hover:border-warning/30 hover:shadow-md"
-                              style={{
-                                animation: `slideIn 0.4s ease-out ${index * 0.06}s both`
-                              }}
                             >
+                              {/* Dismiss button */}
+                              <button
+                                onClick={(e) => dismissNotification(item.id, e)}
+                                className="absolute top-2 right-2 p-1.5 rounded-lg text-text-muted hover:bg-danger/20 hover:text-danger transition-colors opacity-0 group-hover:opacity-100"
+                                title="Dismiss"
+                              >
+                                <X size={14} />
+                              </button>
                               <div className="flex items-center gap-4">
                                 <div className="flex-shrink-0">
                                   <div className={`p-3 rounded-xl transition-transform group-hover:scale-110 ${
@@ -476,7 +535,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                     } />
                                   </div>
                                 </div>
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-0 pr-6">
                                   <div className="flex items-center justify-between gap-3 mb-1.5">
                                     <p className="font-semibold text-base text-text truncate">
                                       {item.brand} {item.model}
@@ -500,7 +559,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                                   </div>
                                 </div>
                               </div>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       )}

@@ -423,7 +423,7 @@ export default function DashboardPage() {
             className="bg-bg border border-border-muted rounded-lg p-6 text-center"
           >
             <p className="text-sm text-success uppercase tracking-wider mb-2">Today's Revenue</p>
-            <p className="text-3xl font-bold text-text-muted">${stats.revenueToday.toFixed(0)}</p>
+            <p className="text-3xl font-bold text-text">${stats.revenueToday.toFixed(0)}</p>
             <p className="text-xs text-text-muted mt-2">Week: ${stats.revenueWeek.toFixed(0)}</p>
           </motion.div>
 
@@ -435,7 +435,7 @@ export default function DashboardPage() {
               className="bg-bg border border-border-muted rounded-lg p-6 text-center cursor-pointer hover:-translate-y-1 transition-transform"
             >
               <p className="text-sm text-warning uppercase tracking-wider mb-2">Pending Orders</p>
-              <p className="text-3xl font-bold text-text-muted">{stats.pendingOrders}</p>
+              <p className="text-3xl font-bold text-text">{stats.pendingOrders}</p>
               <p className="text-xs text-text-muted mt-2">Needs attention</p>
             </motion.div>
           </Link>
@@ -448,7 +448,7 @@ export default function DashboardPage() {
               className="bg-bg border border-border-muted rounded-lg p-6 text-center cursor-pointer hover:-translate-y-1 transition-transform"
             >
               <p className="text-sm text-danger uppercase tracking-wider mb-2">Low Stock Items</p>
-              <p className="text-3xl font-bold text-text-muted">{stats.lowStockItems}</p>
+              <p className="text-3xl font-bold text-text">{stats.lowStockItems}</p>
               <p className="text-xs text-text-muted mt-2">Requires reorder</p>
             </motion.div>
           </Link>
@@ -460,7 +460,7 @@ export default function DashboardPage() {
             className="bg-bg border border-border-muted rounded-lg p-6 text-center"
           >
             <p className="text-sm text-info uppercase tracking-wider mb-2">Today's Appointments</p>
-            <p className="text-3xl font-bold text-text-muted">{stats.todayAppointments}</p>
+            <p className="text-3xl font-bold text-text">{stats.todayAppointments}</p>
             <p className="text-xs text-text-muted mt-2">Scheduled today</p>
           </motion.div>
         </div>
@@ -478,7 +478,7 @@ export default function DashboardPage() {
               <h3 className="text-lg font-semibold text-text">Schedule</h3>
               <button
                 onClick={() => setSelectedDate(new Date())}
-                className="px-3 py-1.5 text-sm rounded-lg bg-bg-light text-text-muted hover:bg-primary hover:text-text-muted transition-colors"
+                className="px-3 py-1.5 text-sm rounded-lg bg-bg-light text-text-muted hover:bg-primary hover:text-white transition-colors"
               >
                 Today
               </button>
@@ -545,7 +545,7 @@ export default function DashboardPage() {
                         }}
                         className={`aspect-square rounded-lg text-sm font-medium transition-all relative flex items-center justify-center ${
                           isSelected
-                            ? 'bg-primary text-text-muted shadow-md'
+                            ? 'bg-primary text-white shadow-md'
                             : isToday
                             ? 'bg-info/20 text-info ring-2 ring-info'
                             : isPast

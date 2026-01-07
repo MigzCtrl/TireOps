@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { ClipboardList, Plus, Calendar, Clock, Trash2, Edit, Search, Eye, ArrowUp, ArrowDown, CheckCircle2, AlertCircle, Loader2, XCircle } from 'lucide-react';
+import { ClipboardList, Plus, Calendar, Clock, Trash2, Edit, Search, Eye, ArrowUp, ArrowDown, CheckCircle2, AlertCircle, Loader2, XCircle, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { formatTime } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+// Real-time inventory is now handled when adding/removing from cart
 
 interface WorkOrder {
   id: string;
@@ -50,7 +51,7 @@ type SortField = 'customer_name' | 'service_type' | 'scheduled_date' | 'status' 
 type SortDirection = 'asc' | 'desc';
 
 export default function WorkOrdersPage() {
-  const { profile, canEdit, canDelete, loading: authLoading } = useAuth();
+  const { profile, shop, canEdit, canDelete, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -69,6 +70,8 @@ export default function WorkOrdersPage() {
   const [stockError, setStockError] = useState<string>('');
   const [sortField, setSortField] = useState<SortField>('scheduled_date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
   const [formData, setFormData] = useState({
     customer_id: '',
     service_type: '',
@@ -83,6 +86,33 @@ export default function WorkOrdersPage() {
   useEffect(() => {
     if (!profile?.shop_id) return;
     loadData();
+
+    // Real-time subscription for inventory changes
+    const inventoryChannel = supabase
+      .channel('inventory-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventory',
+          filter: `shop_id=eq.${profile.shop_id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            setTires(prev => prev.map(t =>
+              t.id === (payload.new as any).id
+                ? { ...t, quantity: (payload.new as any).quantity }
+                : t
+            ));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(inventoryChannel);
+    };
   }, [profile?.shop_id]);
 
   async function loadData() {
@@ -95,7 +125,8 @@ export default function WorkOrdersPage() {
         .select(`
           *,
           customer:customers!inner(id, name, email, phone),
-          tire:inventory(id, brand, model, size, price)
+          tire:inventory(id, brand, model, size, price),
+          work_order_items(id, tire_id, quantity, inventory(brand, model, size))
         `)
         .eq('shop_id', profile.shop_id)
         .order('scheduled_date', { ascending: false });
@@ -105,9 +136,13 @@ export default function WorkOrdersPage() {
       const ordersWithNames = (orders || []).map((order: any) => ({
         ...order,
         customer_name: order.customer?.name || 'Unknown',
-        tire_info: order.tire
-          ? `${order.tire.brand} ${order.tire.model} (${order.tire.size})`
-          : 'No tire selected',
+        tire_info: order.work_order_items && order.work_order_items.length > 0
+          ? order.work_order_items.map((item: any) =>
+              item.inventory ? `${item.inventory.brand} ${item.inventory.model} x${item.quantity}` : ''
+            ).filter(Boolean).join(', ') || 'No tire selected'
+          : order.tire
+            ? `${order.tire.brand} ${order.tire.model} (${order.tire.size})`
+            : 'No tire selected',
       }));
 
       setWorkOrders(ordersWithNames);
@@ -136,7 +171,46 @@ export default function WorkOrdersPage() {
   }
 
   function calculateTotal() {
-    return selectedTires.reduce((sum, st) => sum + (st.quantity * st.tire.price), 0);
+    const subtotal = selectedTires.reduce((sum, st) => sum + (st.quantity * st.tire.price), 0);
+    const taxRate = shop?.tax_rate || 0;
+    const tax = subtotal * (taxRate / 100);
+    const total = subtotal + tax;
+    return { subtotal, tax, taxRate, total };
+  }
+
+  // Update inventory atomically (prevents race conditions)
+  async function handleInventoryUpdate(tireId: string, quantityChange: number) {
+    if (!profile?.shop_id) return;
+
+    try {
+      const { data, error } = await supabase.rpc('update_inventory_atomic', {
+        p_tire_id: tireId,
+        p_quantity_change: quantityChange,
+        p_shop_id: profile.shop_id
+      });
+
+      if (error) throw error;
+
+      if (data && data[0] && !data[0].success) {
+        throw new Error(data[0].error_message || 'Failed to update inventory');
+      }
+    } catch (error) {
+      console.error('Error updating inventory:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update inventory",
+      });
+    }
+  }
+
+  // Restore inventory when canceling edit (for items that were in the original order)
+  async function restoreCartInventory() {
+    if (selectedTires.length === 0) return;
+
+    for (const st of selectedTires) {
+      await handleInventoryUpdate(st.tire.id, st.quantity);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -154,7 +228,8 @@ export default function WorkOrdersPage() {
     if (!profile?.shop_id) return;
 
     try {
-      const totalAmount = selectedTires.length > 0 ? calculateTotal() : null;
+      const totals = selectedTires.length > 0 ? calculateTotal() : null;
+      const totalAmount = totals?.total || null;
 
       if (editingOrderId) {
         const { error: updateError } = await supabase
@@ -283,7 +358,7 @@ export default function WorkOrdersPage() {
     }
   }
 
-  function startEditingOrder(order: WorkOrder) {
+  async function startEditingOrder(order: WorkOrder) {
     setEditingOrderId(order.id);
     setFormData({
       customer_id: order.customer_id,
@@ -293,10 +368,68 @@ export default function WorkOrdersPage() {
       notes: order.notes,
       status: order.status,
     });
+
+    // Load existing work order items for the cart
+    if (profile?.shop_id) {
+      const { data: items } = await supabase
+        .from('work_order_items')
+        .select('tire_id, quantity, unit_price, inventory(id, brand, model, size, price, quantity)')
+        .eq('work_order_id', order.id);
+
+      if (items && items.length > 0) {
+        // First, restore inventory for original order items so user sees full available stock
+        for (const item of items) {
+          if (item.tire_id) {
+            await handleInventoryUpdate(item.tire_id, item.quantity);
+          }
+        }
+
+        // Reload tires to get updated quantities
+        const { data: updatedTires } = await supabase
+          .from('inventory')
+          .select('id, brand, model, size, price, quantity')
+          .eq('shop_id', profile.shop_id)
+          .order('brand');
+
+        if (updatedTires) {
+          setTires(updatedTires);
+        }
+
+        const existingTires: SelectedTire[] = items
+          .filter((item: any) => item.inventory)
+          .map((item: any) => {
+            const updatedTire = updatedTires?.find(t => t.id === item.inventory.id);
+            return {
+              tire: {
+                id: item.inventory.id,
+                brand: item.inventory.brand,
+                model: item.inventory.model,
+                size: item.inventory.size,
+                price: item.unit_price || item.inventory.price,
+                quantity: updatedTire?.quantity || item.inventory.quantity + item.quantity,
+              },
+              quantity: item.quantity,
+            };
+          });
+
+        // Now decrement inventory for items going into cart
+        for (const st of existingTires) {
+          await handleInventoryUpdate(st.tire.id, -st.quantity);
+        }
+
+        setSelectedTires(existingTires);
+      } else {
+        setSelectedTires([]);
+      }
+    }
+
     setShowForm(true);
   }
 
-  function cancelEdit() {
+  async function cancelEdit() {
+    // Restore inventory for items in cart
+    await restoreCartInventory();
+
     setEditingOrderId(null);
     setFormData({
       customer_id: '',
@@ -314,15 +447,7 @@ export default function WorkOrdersPage() {
     if (!profile?.shop_id) return;
 
     try {
-      // Get current order status before updating
-      const { data: currentOrder } = await supabase
-        .from('work_orders')
-        .select('status')
-        .eq('id', id)
-        .eq('shop_id', profile.shop_id)
-        .single();
-
-      // Update work order status
+      // Direct status update - inventory is already updated when adding to cart
       const { error } = await supabase
         .from('work_orders')
         .update({ status: newStatus })
@@ -331,55 +456,13 @@ export default function WorkOrdersPage() {
 
       if (error) throw error;
 
-      // If order is being marked as completed, deduct inventory
-      if (newStatus === 'completed' && currentOrder?.status !== 'completed') {
-        // Fetch work order items
-        const { data: workOrderItems, error: itemsError } = await supabase
-          .from('work_order_items')
-          .select('tire_id, quantity')
-          .eq('work_order_id', id);
-
-        if (itemsError) {
-          console.error('Error fetching work order items:', itemsError);
-        } else if (workOrderItems && workOrderItems.length > 0) {
-          // Deduct inventory for each tire
-          for (const item of workOrderItems) {
-            // Get current inventory quantity
-            const { data: inventoryItem, error: inventoryError } = await supabase
-              .from('inventory')
-              .select('quantity')
-              .eq('id', item.tire_id)
-              .eq('shop_id', profile.shop_id)
-              .single();
-
-            if (inventoryError) {
-              console.error('Error fetching inventory:', inventoryError);
-              continue;
-            }
-
-            // Calculate new quantity (prevent negative)
-            const newQuantity = Math.max(0, (inventoryItem?.quantity || 0) - item.quantity);
-
-            // Update inventory
-            const { error: updateError } = await supabase
-              .from('inventory')
-              .update({ quantity: newQuantity })
-              .eq('id', item.tire_id)
-              .eq('shop_id', profile.shop_id);
-
-            if (updateError) {
-              console.error('Error updating inventory:', updateError);
-            }
-          }
-        }
-      }
-
       toast({
         title: "Success!",
         description: newStatus === 'completed'
-          ? "Order completed and inventory updated"
+          ? "Order completed!"
           : "Status updated successfully",
       });
+
       loadData();
     } catch (error) {
       console.error('Error updating status:', error);
@@ -533,6 +616,19 @@ export default function WorkOrdersPage() {
     if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
     return 0;
   });
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, serviceTypeFilter, searchTerm, dateRangeFilter, sortField, sortDirection]);
+
+  // Paginate sorted work orders
+  const totalFilteredCount = sortedWorkOrders.length;
+  const totalPages = Math.ceil(totalFilteredCount / ITEMS_PER_PAGE);
+  const paginatedWorkOrders = sortedWorkOrders.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const stats = {
     total: workOrders.length,
@@ -705,9 +801,33 @@ export default function WorkOrdersPage() {
                         setStockError(message);
                         setTimeout(() => setStockError(''), 5000);
                       }}
+                      onInventoryUpdate={handleInventoryUpdate}
                     />
                   </div>
                 </div>
+
+                {/* Order Summary with Tax */}
+                {selectedTires.length > 0 && (
+                  <div className="p-4 rounded-lg bg-bg-light border border-border-muted">
+                    <h4 className="text-sm font-semibold text-text mb-3">Order Summary</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-text-muted">Subtotal</span>
+                        <span className="text-text">${calculateTotal().subtotal.toFixed(2)}</span>
+                      </div>
+                      {calculateTotal().taxRate > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-text-muted">Tax ({calculateTotal().taxRate}%)</span>
+                          <span className="text-text">${calculateTotal().tax.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-base font-semibold pt-2 border-t border-border-muted">
+                        <span className="text-text">Total</span>
+                        <span className="text-primary">${calculateTotal().total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-border-muted">
@@ -830,7 +950,7 @@ export default function WorkOrdersPage() {
 
         {/* Work Orders Table */}
         <div className="bg-bg border border-border-muted rounded-lg shadow-md overflow-hidden">
-          {sortedWorkOrders.length === 0 ? (
+          {paginatedWorkOrders.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-text-muted">
                 {workOrders.length === 0
@@ -904,7 +1024,7 @@ export default function WorkOrdersPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-bg divide-y divide-border-muted">
-                  {sortedWorkOrders.map((order, index) => (
+                  {paginatedWorkOrders.map((order, index) => (
                     <tr
                       key={order.id}
                       className="hover:bg-bg-light transition-colors"
@@ -929,7 +1049,7 @@ export default function WorkOrdersPage() {
                           value={order.status}
                           onValueChange={(newStatus) => updateStatus(order.id, newStatus)}
                         >
-                          <SelectTrigger className="w-[140px] h-7 text-xs border-0 shadow-none p-0 hover:bg-transparent">
+                          <SelectTrigger className="w-[160px] h-7 text-xs border-0 shadow-none px-2 gap-4 hover:bg-transparent">
                             <div>{getStatusBadge(order.status)}</div>
                           </SelectTrigger>
                           <SelectContent>
@@ -956,6 +1076,16 @@ export default function WorkOrdersPage() {
                               <Eye size={16} />
                             </Button>
                           </Link>
+                          <Link href={`/invoice/${order.id}`}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-info hover:bg-info/10"
+                              title="View Invoice"
+                            >
+                              <FileText size={16} />
+                            </Button>
+                          </Link>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -980,6 +1110,40 @@ export default function WorkOrdersPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {totalFilteredCount > ITEMS_PER_PAGE && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-border-muted">
+              <div className="text-sm text-text-muted">
+                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, totalFilteredCount)} of {totalFilteredCount} orders
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft size={16} />
+                  Previous
+                </Button>
+                <span className="text-sm text-text-muted px-3">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </Button>
+              </div>
             </div>
           )}
         </div>

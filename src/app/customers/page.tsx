@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Users, Plus, Search, Edit, Eye, Trash2, UserPlus, Calendar, ShoppingBag, ArrowUp, ArrowDown } from 'lucide-react';
+import { Users, Plus, Search, Edit, Eye, Trash2, UserPlus, Calendar, ShoppingBag, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,10 @@ export default function CustomersPage() {
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [newThisWeekCount, setNewThisWeekCount] = useState(0);
+  const ITEMS_PER_PAGE = 10;
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -59,18 +63,40 @@ export default function CustomersPage() {
   useEffect(() => {
     if (!profile?.shop_id) return;
     loadData();
-  }, [profile?.shop_id]);
+  }, [profile?.shop_id, currentPage]);
 
   async function loadData() {
     if (!profile?.shop_id) return;
 
     try {
+      // Get new this week count (separate query for accurate stats)
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { count: newCount } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true })
+        .eq('shop_id', profile.shop_id)
+        .gte('created_at', oneWeekAgo);
+      setNewThisWeekCount(newCount || 0);
+
+      // Get total count for pagination
+      const { count } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true })
+        .eq('shop_id', profile.shop_id);
+
+      setTotalCount(count || 0);
+
+      // Calculate pagination range
+      const from = (currentPage - 1) * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
       const [customersRes, ordersRes] = await Promise.all([
         supabase
           .from('customers')
           .select('*')
           .eq('shop_id', profile.shop_id)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .range(from, to),
         supabase
           .from('work_orders')
           .select('id, customer_id')
@@ -125,7 +151,7 @@ export default function CustomersPage() {
 
       if (!validationResult.success) {
         // Show first validation error
-        const firstError = validationResult.error.errors?.[0];
+        const firstError = validationResult.error.issues?.[0];
         toast({
           variant: "destructive",
           title: "Validation Error",
@@ -236,8 +262,8 @@ export default function CustomersPage() {
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const stats = {
-    total: customers.length,
-    newThisWeek: customers.filter(c => new Date(c.created_at) >= oneWeekAgo).length,
+    total: totalCount,
+    newThisWeek: newThisWeekCount,
     active: customers.filter(c => (c.order_count || 0) > 0).length,
     totalOrders: workOrders.length,
   };
@@ -635,6 +661,40 @@ export default function CustomersPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {totalCount > ITEMS_PER_PAGE && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-border-muted">
+              <div className="text-sm text-text-muted">
+                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, totalCount)} of {totalCount} customers
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft size={16} />
+                  Previous
+                </Button>
+                <span className="text-sm text-text-muted px-3">
+                  Page {currentPage} of {Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / ITEMS_PER_PAGE), p + 1))}
+                  disabled={currentPage >= Math.ceil(totalCount / ITEMS_PER_PAGE)}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </Button>
+              </div>
             </div>
           )}
         </div>

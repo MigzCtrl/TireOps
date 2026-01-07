@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { motion } from 'framer-motion';
-import { Lock, User, Eye, EyeOff, UserPlus, CheckCircle } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, UserPlus, CheckCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,10 +20,30 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Password validation
+  // Get invite token and email from URL
+  const inviteToken = searchParams.get('invite');
+  const inviteEmail = searchParams.get('email');
+
+  // Pre-fill email from invite
+  useEffect(() => {
+    if (inviteEmail) {
+      setEmail(decodeURIComponent(inviteEmail));
+    }
+  }, [inviteEmail]);
+
+  // Password validation - matches registerSchema requirements
   const validatePassword = (): string | null => {
-    if (password.length < 6) {
-      return 'Password must be at least 6 characters long';
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters long';
+    }
+    if (!/[a-z]/.test(password)) {
+      return 'Password must contain at least one lowercase letter';
+    }
+    if (!/[A-Z]/.test(password)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (!/\d/.test(password)) {
+      return 'Password must contain at least one number';
     }
     if (password !== confirmPassword) {
       return 'Passwords do not match';
@@ -55,9 +76,14 @@ export default function SignupPage() {
       if (data.user) {
         setSuccess(true);
 
-        // Auto-redirect to dashboard after 1.5 seconds
+        // Auto-redirect after 1.5 seconds
         setTimeout(() => {
-          router.push('/');
+          if (inviteToken) {
+            // Redirect to accept invite
+            router.push(`/invite/${inviteToken}`);
+          } else {
+            router.push('/');
+          }
           router.refresh();
         }, 1500);
       }
@@ -89,7 +115,7 @@ export default function SignupPage() {
             Big Boy Tires
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Create your admin account
+            {inviteToken ? 'Create your account to join the team' : 'Create your admin account'}
           </p>
         </div>
 
@@ -135,7 +161,7 @@ export default function SignupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  placeholder="Minimum 6 characters"
+                  placeholder="Strong password required"
                   className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 />
                 <button
@@ -151,7 +177,7 @@ export default function SignupPage() {
                 </button>
               </div>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Must be at least 6 characters
+                Min 8 characters with uppercase, lowercase, and number
               </p>
             </div>
 
@@ -207,7 +233,7 @@ export default function SignupPage() {
                 <div className="flex items-center gap-2">
                   <CheckCircle className="text-green-600 dark:text-green-400" size={20} />
                   <p className="text-sm text-green-600 dark:text-green-400">
-                    Account created successfully! Redirecting to dashboard...
+                    Account created successfully! Redirecting...
                   </p>
                 </div>
               </motion.div>
@@ -255,5 +281,17 @@ export default function SignupPage() {
         </p>
       </motion.div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    }>
+      <SignupForm />
+    </Suspense>
   );
 }

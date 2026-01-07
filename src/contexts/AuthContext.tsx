@@ -23,6 +23,10 @@ export interface Shop {
   email: string | null
   phone: string | null
   address: string | null
+  tax_rate: number | null
+  currency: string | null
+  email_notifications: boolean | null
+  low_stock_threshold: number | null
   created_at: string
   updated_at: string
 }
