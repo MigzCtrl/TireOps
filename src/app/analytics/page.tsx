@@ -10,6 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
+// Get supabase client ONCE outside component to prevent re-creation on renders
+const supabase = createClient();
+
 interface Analytics {
   totalCustomers: number;
   totalWorkOrders: number;
@@ -37,8 +40,6 @@ export default function AnalyticsPage() {
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
   const [allInventory, setAllInventory] = useState<any[]>([]);
 
-  const supabase = createClient();
-
   useEffect(() => {
     if (!profile?.shop_id) return;
     loadData();
@@ -58,7 +59,7 @@ export default function AnalyticsPage() {
         supabase.from('customers').select('*').eq('shop_id', profile.shop_id),
         supabase
           .from('work_orders')
-          .select('*, customers(name), inventory(brand, model, price)')
+          .select('*, customers(name), inventory(brand, model, price), work_order_items(quantity, inventory(brand, model))')
           .eq('shop_id', profile.shop_id),
         supabase.from('inventory').select('*').eq('shop_id', profile.shop_id),
       ]);
@@ -157,10 +158,20 @@ export default function AnalyticsPage() {
       .sort((a: any, b: any) => b.count - a.count)
       .slice(0, 5);
 
-    // Popular tires by usage in orders
+    // Popular tires by usage in orders (from work_order_items)
     const tireUsage: any = {};
     filteredOrders.forEach((order: any) => {
-      if (order.inventory) {
+      // Check work_order_items first (new system)
+      if (order.work_order_items && order.work_order_items.length > 0) {
+        order.work_order_items.forEach((item: any) => {
+          if (item.inventory) {
+            const tireKey = `${item.inventory.brand} ${item.inventory.model}`;
+            tireUsage[tireKey] = (tireUsage[tireKey] || 0) + (item.quantity || 1);
+          }
+        });
+      }
+      // Fallback to legacy tire_id (old system)
+      else if (order.inventory) {
         const tireKey = `${order.inventory.brand} ${order.inventory.model}`;
         tireUsage[tireKey] = (tireUsage[tireKey] || 0) + 1;
       }
@@ -517,9 +528,18 @@ export default function AnalyticsPage() {
                       className="hover:bg-bg-light transition-colors"
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-text">
-                          {order.customers?.name || 'Unknown'}
-                        </div>
+                        {order.customer_id ? (
+                          <Link
+                            href={`/customers/${order.customer_id}`}
+                            className="text-sm font-medium text-primary hover:text-primary/80 hover:underline transition-colors"
+                          >
+                            {order.customers?.name || 'Unknown'}
+                          </Link>
+                        ) : (
+                          <div className="text-sm font-medium text-text">
+                            {order.customers?.name || 'Unknown'}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-text">

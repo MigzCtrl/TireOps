@@ -67,6 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (profileError) {
         console.error('[AuthContext] Error loading profile:', profileError)
+        // CRITICAL FIX: Set profile to null and stop loading even on error
+        setProfile(null)
+        setShop(null)
         setLoading(false)
         return
       }
@@ -83,6 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (shopError) {
           console.error('[AuthContext] Error loading shop:', shopError)
+          // CRITICAL FIX: Set shop to null but don't fail the whole operation
+          setShop(null)
         } else {
           setShop(shopData)
         }
@@ -91,6 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     } catch (error) {
       console.error('[AuthContext] Error in loadProfile:', error)
+      // CRITICAL FIX: Always set loading to false and reset state
+      setProfile(null)
+      setShop(null)
       setLoading(false)
     }
   }
@@ -102,12 +110,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    let isMounted = true
+
     // Get initial session
     supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!isMounted) return
+
       setUser(user)
       if (user) {
-        loadProfile(user.id).finally(() => setLoading(false))
+        loadProfile(user.id)
       } else {
+        setLoading(false)
+      }
+    }).catch((error) => {
+      console.error('[AuthContext] Error getting user:', error)
+      if (isMounted) {
         setLoading(false)
       }
     })
@@ -115,19 +132,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!isMounted) return
+
         setUser(session?.user ?? null)
 
         if (session?.user) {
-          await loadProfile(session.user.id)
+          try {
+            await loadProfile(session.user.id)
+          } catch (error) {
+            console.error('[AuthContext] Error in onAuthStateChange:', error)
+            setProfile(null)
+            setShop(null)
+            setLoading(false)
+          }
         } else {
           setProfile(null)
           setShop(null)
+          setLoading(false)
         }
-        setLoading(false)
       }
     )
 
     return () => {
+      isMounted = false
       subscription.unsubscribe()
     }
   }, [])

@@ -2,14 +2,18 @@
 
 import { useTheme } from '@/contexts/ThemeContext';
 import {
-  Sun, Moon, Search, Bell, AlertTriangle,
+  Sun, Moon, Search, Bell,
   Users, Package, ClipboardList, TrendingUp, Home, LogOut, User, Menu, X, Settings, Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { SwipeableNotification, type LowStockItem } from '@/components/shared/notifications/SwipeableNotification';
+
+// Get supabase client ONCE outside component to prevent re-creation on renders
+const supabase = createClient();
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -20,14 +24,6 @@ interface SearchResult {
   name: string;
   type: 'customer' | 'tire';
   subtitle?: string;
-}
-
-interface LowStockItem {
-  id: string;
-  brand: string;
-  model: string;
-  size: string;
-  quantity: number;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -47,7 +43,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
-  const supabase = createClient();
+  // supabase client is already created at line 15 outside component - removed duplicate
 
   const navItems = [
     { href: '/', label: 'Overview', icon: Home },
@@ -55,7 +51,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { href: '/inventory', label: 'Inventory', icon: Package },
     { href: '/work-orders', label: 'Work Orders', icon: ClipboardList },
     { href: '/analytics', label: 'Analytics', icon: TrendingUp },
-    { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
   const isActive = (href: string) => {
@@ -145,10 +140,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       if (error) {
         console.error('Logout failed:', error);
       }
+      // CRITICAL FIX: Only push, middleware handles the redirect
       router.push('/login');
-      router.refresh();
     } catch (err) {
       console.error('Logout failed:', err);
+      // Ensure navigation even on error
+      router.push('/login');
     }
   }
 
@@ -370,7 +367,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="flex items-center gap-4 flex-1 min-w-0">
               <div ref={searchRef} className="relative flex-1 max-w-md hidden md:block">
                 <form onSubmit={handleGlobalSearch} className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
                   <input
                     type="text"
                     placeholder="Search customers, tires..."
@@ -451,9 +448,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 >
                   <Bell size={20} />
                   {visibleLowStockItems.some(item => item.quantity === 0) ? (
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full animate-pulse"></span>
                   ) : visibleLowStockItems.length > 0 ? (
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-warning rounded-full animate-pulse"></span>
                   ) : null}
                 </button>
 
@@ -502,82 +499,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       ) : (
                         <div className="space-y-2">
                           {visibleLowStockItems.map((item, index) => (
-                            <div
+                            <SwipeableNotification
                               key={item.id}
-                              className="relative w-full p-4 hover:bg-bg-light transition-all duration-300 text-left rounded-xl group border border-border-muted hover:border-warning/30 hover:shadow-md cursor-pointer"
-                              style={{
-                                animation: `slideIn 0.4s ease-out ${index * 0.06}s both`
+                              item={item}
+                              index={index}
+                              onDismiss={(id) => {
+                                const newSet = new Set(dismissedNotifications);
+                                newSet.add(id);
+                                saveDismissed(newSet);
                               }}
                               onClick={() => {
                                 router.push('/inventory');
                                 setShowNotifications(false);
                               }}
-                            >
-                              {/* Dismiss button */}
-                              <button
-                                onClick={(e) => dismissNotification(item.id, e)}
-                                className="absolute top-2 right-2 p-1.5 rounded-lg text-text-muted hover:bg-danger/20 hover:text-danger transition-colors opacity-0 group-hover:opacity-100"
-                                title="Dismiss"
-                              >
-                                <X size={14} />
-                              </button>
-                              <div className="flex items-center gap-4">
-                                <div className="flex-shrink-0">
-                                  <div className={`p-3 rounded-xl transition-transform group-hover:scale-110 ${
-                                    item.quantity === 0
-                                      ? 'bg-danger/20'
-                                      : 'bg-warning/20'
-                                  }`}>
-                                    <AlertTriangle size={24} className={
-                                      item.quantity === 0
-                                        ? 'text-danger'
-                                        : 'text-warning'
-                                    } />
-                                  </div>
-                                </div>
-                                <div className="flex-1 min-w-0 pr-6">
-                                  <div className="flex items-center justify-between gap-3 mb-1.5">
-                                    <p className="font-semibold text-base text-text truncate">
-                                      {item.brand} {item.model}
-                                    </p>
-                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
-                                      item.quantity === 0
-                                        ? 'bg-danger/20 text-danger border border-danger/30'
-                                        : 'bg-warning/20 text-warning border border-warning/30'
-                                    }`}>
-                                      {item.quantity === 0 ? 'OUT OF STOCK' : `${item.quantity} left`}
-                                    </span>
-                                  </div>
-                                  <p className="text-sm text-text-muted mb-1">
-                                    Size: {item.size}
-                                  </p>
-                                  <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                                    <span className={`w-1.5 h-1.5 rounded-full ${
-                                      item.quantity === 0 ? 'bg-danger' : 'bg-warning'
-                                    } animate-pulse`}></span>
-                                    {item.quantity === 0 ? 'Restock immediately' : 'Low stock alert'}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                            />
                           ))}
                         </div>
                       )}
                     </div>
                   </div>
                 )}
-                <style jsx>{`
-                  @keyframes slideIn {
-                    from {
-                      opacity: 0;
-                      transform: translateY(-10px);
-                    }
-                    to {
-                      opacity: 1;
-                      transform: translateY(0);
-                    }
-                  }
-                `}</style>
               </div>
 
               {/* User Menu */}
@@ -601,6 +542,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       <p className="text-sm font-medium text-text">Signed in as</p>
                       <p className="text-sm text-text-muted truncate">{user?.email || 'No email'}</p>
                     </div>
+                    <Link
+                      href="/settings"
+                      onClick={() => setShowUserMenu(false)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg-light transition-colors text-text"
+                    >
+                      <Settings size={18} />
+                      <span className="font-medium">Settings</span>
+                    </Link>
                     <button
                       onClick={handleLogout}
                       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg-light transition-colors text-danger"

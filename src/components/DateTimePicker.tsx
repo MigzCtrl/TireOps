@@ -83,8 +83,8 @@ export default function DateTimePicker({
     const endHour = 21; // 9:00 PM
 
     for (let hour = startHour; hour <= endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        // Skip 9:30 PM if we want to end at 9:00 PM sharp
+      for (let minute = 0; minute < 60; minute += 5) {
+        // Skip times after 9:00 PM
         if (hour === endHour && minute > 0) break;
 
         const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
@@ -99,16 +99,16 @@ export default function DateTimePicker({
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
-    // Round up to next 30-min slot
-    const nextMinute = currentMinute < 30 ? 30 : 0;
-    const nextHour = currentMinute < 30 ? currentHour : currentHour + 1;
+    // Round up to next 5-min slot
+    const nextMinute = Math.ceil(currentMinute / 5) * 5;
+    const nextHour = nextMinute >= 60 ? currentHour + 1 : currentHour;
+    const finalMinute = nextMinute >= 60 ? 0 : nextMinute;
 
     // Clamp to business hours (5 AM - 9 PM)
     const clampedHour = Math.max(5, Math.min(21, nextHour));
-    const finalMinute = clampedHour === nextHour ? nextMinute : 0;
 
     // If we're past 9 PM, default to 9:00 AM next day
-    if (clampedHour >= 21 && (clampedHour > 21 || finalMinute > 0)) {
+    if (clampedHour >= 21 && finalMinute > 0) {
       return '09:00';
     }
 

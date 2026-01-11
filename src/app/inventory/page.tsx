@@ -16,57 +16,93 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePagination, useSort, useFilters, useModal } from '@/hooks';
+import type { Tire } from '@/types/database';
 
-interface Tire {
-  id: string;
-  brand: string;
-  model: string;
-  size: string;
-  quantity: number;
-  price: number;
-  description: string;
-  created_at: string;
-}
+// Get supabase client ONCE outside component to prevent re-creation on renders
+const supabase = createClient();
 
 type SortField = 'brand' | 'model' | 'size' | 'quantity' | 'price';
-type SortDirection = 'asc' | 'desc';
 
 export default function InventoryPage() {
   const { profile, isOwner, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [inventory, setInventory] = useState<Tire[]>([]);
-  const [filteredInventory, setFilteredInventory] = useState<Tire[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [stockFilter, setStockFilter] = useState('all');
-  const [editingTireId, setEditingTireId] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deletingTire, setDeletingTire] = useState<Tire | null>(null);
-  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle');
-  const [sortField, setSortField] = useState<SortField>('brand');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
 
+  // Data state
+  const [inventory, setInventory] = useState<Tire[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stockFilter, setStockFilter] = useState('all');
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success'>('idle');
+
+  // Modals
+  const formModal = useModal<string | null>(); // editingTireId
+  const deleteModal = useModal<Tire>();
+
+  // Form state
   const [formData, setFormData] = useState({
     brand: '',
     model: '',
     size: '',
-    quantity: 0,
-    price: 0,
+    quantity: '' as string | number,
+    price: '' as string | number,
     description: '',
   });
 
-  const supabase = createClient();
+  // Search and filter hook
+  const { filteredData: searchFilteredData, searchTerm, setSearchTerm } = useFilters(
+    inventory,
+    (tire, search) =>
+      tire.brand.toLowerCase().includes(search.toLowerCase()) ||
+      tire.model.toLowerCase().includes(search.toLowerCase()) ||
+      tire.size.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Apply stock filter manually (custom filter)
+  const stockFilteredData = searchFilteredData.filter((tire) => {
+    if (stockFilter === 'in-stock') return tire.quantity > 0;
+    if (stockFilter === 'low-stock') return tire.quantity > 0 && tire.quantity < 10;
+    if (stockFilter === 'out-of-stock') return tire.quantity === 0;
+    return true; // 'all'
+  });
+
+  // Sort hook
+  const { sortedData, sortField, sortDirection, toggleSort } = useSort<Tire, SortField>(
+    stockFilteredData,
+    'brand'
+  );
+
+  // Pagination hook
+  const {
+    paginatedData,
+    currentPage,
+    totalPages,
+    startIndex,
+    endIndex,
+    totalItems,
+    goToPage,
+    nextPage: handleNextPage,
+    prevPage: handlePrevPage,
+  } = usePagination(sortedData, 10);
 
   useEffect(() => {
     if (!profile?.shop_id) return;
-    loadInventory();
 
-    // Real-time subscription for inventory changes
-    const inventoryChannel = supabase
-      .channel('inventory-realtime')
+    let isMounted = true;
+    let inventoryChannel: any = null;
+
+    const loadInventorySafe = async () => {
+      if (isMounted) {
+        loadInventory();
+      }
+    };
+
+    loadInventorySafe();
+
+    // UNIQUE channel name to prevent collisions with work-orders page
+    const channelName = `inventory-page-${profile.shop_id}`;
+
+    inventoryChannel = supabase
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -76,6 +112,8 @@ export default function InventoryPage() {
           filter: `shop_id=eq.${profile.shop_id}`,
         },
         (payload) => {
+          if (!isMounted) return;
+
           if (payload.eventType === 'UPDATE') {
             setInventory(prev => prev.map(t =>
               t.id === (payload.new as any).id
@@ -92,51 +130,13 @@ export default function InventoryPage() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(inventoryChannel);
+      isMounted = false;
+      // CRITICAL FIX: Ensure channel cleanup
+      if (inventoryChannel) {
+        supabase.removeChannel(inventoryChannel);
+      }
     };
   }, [profile?.shop_id]);
-
-  useEffect(() => {
-    let filtered = inventory;
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (tire) =>
-          tire.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          tire.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          tire.size.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (stockFilter === 'in-stock') {
-      filtered = filtered.filter((tire) => tire.quantity > 0);
-    } else if (stockFilter === 'low-stock') {
-      filtered = filtered.filter((tire) => tire.quantity > 0 && tire.quantity < 10);
-    } else if (stockFilter === 'out-of-stock') {
-      filtered = filtered.filter((tire) => tire.quantity === 0);
-    }
-
-    // Sort
-    filtered = [...filtered].sort((a, b) => {
-      const aVal = a[sortField];
-      const bVal = b[sortField];
-
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortDirection === 'asc'
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal);
-      }
-
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-
-      return 0;
-    });
-
-    setFilteredInventory(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
-  }, [searchTerm, stockFilter, inventory, sortField, sortDirection]);
 
   async function loadInventory() {
     if (!profile?.shop_id) return;
@@ -150,7 +150,6 @@ export default function InventoryPage() {
 
       if (error) throw error;
       setInventory(data || []);
-      setFilteredInventory(data || []);
     } catch (error) {
       console.error('Error loading inventory:', error);
       toast({
@@ -166,6 +165,8 @@ export default function InventoryPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!profile?.shop_id) return;
+
+    const editingTireId = formModal.data;
 
     try {
       if (editingTireId) {
@@ -194,16 +195,15 @@ export default function InventoryPage() {
         });
       }
 
-      setEditingTireId(null);
       setFormData({
         brand: '',
         model: '',
         size: '',
-        quantity: 0,
-        price: 0,
+        quantity: '',
+        price: '',
         description: '',
       });
-      setShowForm(false);
+      formModal.close();
       loadInventory();
     } catch (error) {
       console.error(`Error ${editingTireId ? 'updating' : 'adding'} tire:`, error);
@@ -215,24 +215,14 @@ export default function InventoryPage() {
     }
   }
 
-  function confirmDelete(tire: Tire) {
-    setDeletingTire(tire);
-    setDeleteConfirmId(tire.id);
-  }
-
-  function cancelDelete() {
-    setDeletingTire(null);
-    setDeleteConfirmId(null);
-  }
-
   async function handleDelete() {
-    if (!deleteConfirmId || !profile?.shop_id) return;
+    if (!deleteModal.data || !profile?.shop_id) return;
 
     try {
       const { error } = await supabase
         .from('inventory')
         .delete()
-        .eq('id', deleteConfirmId)
+        .eq('id', deleteModal.data.id)
         .eq('shop_id', profile.shop_id);
 
       if (error) throw error;
@@ -242,7 +232,7 @@ export default function InventoryPage() {
         description: "Tire deleted successfully",
       });
       loadInventory();
-      cancelDelete();
+      deleteModal.close();
     } catch (error) {
       console.error('Error deleting tire:', error);
       toast({
@@ -281,7 +271,6 @@ export default function InventoryPage() {
   }
 
   function startEditingTire(tire: Tire) {
-    setEditingTireId(tire.id);
     setFormData({
       brand: tire.brand,
       model: tire.model,
@@ -290,16 +279,7 @@ export default function InventoryPage() {
       price: tire.price,
       description: tire.description || '',
     });
-    setShowForm(true);
-  }
-
-  function handleSort(field: SortField) {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
+    formModal.open(tire.id);
   }
 
   function getStockBadge(quantity: number) {
@@ -335,7 +315,7 @@ export default function InventoryPage() {
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const headers = ['Brand', 'Model', 'Size', 'Quantity', 'Price', 'Description'];
-    const rows = filteredInventory.map((tire) => [
+    const rows = sortedData.map((tire) => [
       tire.brand,
       tire.model,
       tire.size,
@@ -367,13 +347,6 @@ export default function InventoryPage() {
     setExportStatus('success');
     setTimeout(() => setExportStatus('idle'), 2000);
   }
-
-  // Pagination
-  const totalPages = Math.ceil(filteredInventory.length / ITEMS_PER_PAGE);
-  const paginatedInventory = filteredInventory.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   if (authLoading) {
     return (
@@ -447,7 +420,7 @@ export default function InventoryPage() {
               )}
             </button>
 
-            <Dialog open={showForm} onOpenChange={setShowForm}>
+            <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
               <DialogTrigger asChild>
                 <button
                   disabled={!isOwner}
@@ -460,10 +433,10 @@ export default function InventoryPage() {
               <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
-                    {editingTireId ? 'Edit Tire' : 'Add New Tire'}
+                    {formModal.data ? 'Edit Tire' : 'Add New Tire'}
                   </DialogTitle>
                   <DialogDescription>
-                    {editingTireId ? 'Update tire information in your inventory.' : 'Add a new tire to your inventory.'}
+                    {formModal.data ? 'Update tire information in your inventory.' : 'Add a new tire to your inventory.'}
                   </DialogDescription>
                 </DialogHeader>
 
@@ -513,12 +486,14 @@ export default function InventoryPage() {
                         required
                         min="0"
                         value={formData.quantity}
-                        onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => setFormData({ ...formData, quantity: e.target.value === '' ? '' : parseInt(e.target.value) || 0 })}
+                        placeholder="4"
+                        className="text-lg"
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="price">Price *</Label>
+                      <Label htmlFor="price">Price per tire *</Label>
                       <Input
                         id="price"
                         type="number"
@@ -526,8 +501,9 @@ export default function InventoryPage() {
                         min="0"
                         step="0.01"
                         value={formData.price}
-                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
                         placeholder="99.99"
+                        className="text-lg"
                       />
                     </div>
 
@@ -548,14 +524,13 @@ export default function InventoryPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        setShowForm(false);
-                        setEditingTireId(null);
+                        formModal.close();
                         setFormData({
                           brand: '',
                           model: '',
                           size: '',
-                          quantity: 0,
-                          price: 0,
+                          quantity: '',
+                          price: '',
                           description: '',
                         });
                       }}
@@ -567,7 +542,7 @@ export default function InventoryPage() {
                       type="submit"
                       className="px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors"
                     >
-                      {editingTireId ? 'Update Tire' : 'Add Tire'}
+                      {formModal.data ? 'Update Tire' : 'Add Tire'}
                     </button>
                   </div>
                 </form>
@@ -626,7 +601,7 @@ export default function InventoryPage() {
 
         {/* Table View */}
         <div className="bg-bg border border-border-muted rounded-lg overflow-hidden">
-          {filteredInventory.length === 0 ? (
+          {sortedData.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-text-muted">
                 {searchTerm || stockFilter !== 'all'
@@ -638,133 +613,133 @@ export default function InventoryPage() {
             <>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-bg-light border-b border-border-muted">
+                  <thead className="bg-bg-light border-b-2 border-border-muted">
                     <tr>
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
-                        onClick={() => handleSort('brand')}
+                        className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => toggleSort('brand')}
                       >
                         <div className="flex items-center gap-2">
                           Brand
                           {sortField === 'brand' && (
-                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                            sortDirection === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
                           )}
                         </div>
                       </th>
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
-                        onClick={() => handleSort('model')}
+                        className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => toggleSort('model')}
                       >
                         <div className="flex items-center gap-2">
                           Model
                           {sortField === 'model' && (
-                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                            sortDirection === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
                           )}
                         </div>
                       </th>
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
-                        onClick={() => handleSort('size')}
+                        className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => toggleSort('size')}
                       >
                         <div className="flex items-center gap-2">
                           Size
                           {sortField === 'size' && (
-                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                            sortDirection === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
                           )}
                         </div>
                       </th>
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
-                        onClick={() => handleSort('quantity')}
+                        className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => toggleSort('quantity')}
                       >
                         <div className="flex items-center gap-2">
                           Stock
                           {sortField === 'quantity' && (
-                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                            sortDirection === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
                           )}
                         </div>
                       </th>
                       <th
-                        className="px-6 py-3 text-left text-xs font-medium text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
-                        onClick={() => handleSort('price')}
+                        className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-text uppercase tracking-wider cursor-pointer hover:bg-bg-light/80 transition-colors"
+                        onClick={() => toggleSort('price')}
                       >
                         <div className="flex items-center gap-2">
                           Price
                           {sortField === 'price' && (
-                            sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                            sortDirection === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
                           )}
                         </div>
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-text uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-4 text-right text-sm font-semibold text-text uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-bg divide-y divide-border-muted">
-                    {paginatedInventory.map((tire, index) => (
+                    {paginatedData.map((tire, index) => (
                       <tr
                         key={tire.id}
                         className="hover:bg-bg-light transition-colors"
                       >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-text">
+                        <td className="px-4 md:px-6 py-4 md:py-5 whitespace-nowrap">
+                          <div className="text-base md:text-lg font-semibold text-text">
                             {tire.brand}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-text">
+                        <td className="px-4 md:px-6 py-4 md:py-5 whitespace-nowrap">
+                          <div className="text-base md:text-lg text-text">
                             {tire.model}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-text-muted">
+                        <td className="px-4 md:px-6 py-4 md:py-5 whitespace-nowrap">
+                          <div className="text-base text-text-muted font-medium">
                             {tire.size}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 md:px-6 py-4 md:py-5 whitespace-nowrap">
                           <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-2">
                               <button
                                 onClick={() => updateQuantity(tire.id, tire.quantity - 1)}
                                 disabled={!isOwner || tire.quantity === 0}
-                                className="p-1 rounded hover:bg-bg-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="p-2 rounded-lg hover:bg-bg-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               >
-                                <Minus size={14} className="text-text-muted" />
+                                <Minus size={18} className="text-text-muted" />
                               </button>
-                              <span className="text-sm font-medium text-text w-8 text-center">
+                              <span className="text-lg font-bold text-text w-10 text-center">
                                 {tire.quantity}
                               </span>
                               <button
                                 onClick={() => updateQuantity(tire.id, tire.quantity + 1)}
                                 disabled={!isOwner}
-                                className="p-1 rounded hover:bg-bg-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="p-2 rounded-lg hover:bg-bg-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                               >
-                                <Plus size={14} className="text-text-muted" />
+                                <Plus size={18} className="text-text-muted" />
                               </button>
                             </div>
                             {getStockBadge(tire.quantity)}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-text">
+                        <td className="px-4 md:px-6 py-4 md:py-5 whitespace-nowrap">
+                          <div className="text-base md:text-lg font-bold text-success">
                             ${tire.price.toFixed(2)}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-4 md:px-6 py-4 md:py-5 whitespace-nowrap text-right font-medium">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => startEditingTire(tire)}
                               disabled={!isOwner}
-                              className="p-2 rounded-lg bg-bg-light text-text-muted hover:bg-info hover:text-text-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
+                              className="p-2.5 rounded-lg bg-bg-light text-text-muted hover:bg-info hover:text-text-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
                             >
-                              <Edit size={14} />
+                              <Edit size={18} />
                             </button>
                             <button
-                              onClick={() => confirmDelete(tire)}
+                              onClick={() => deleteModal.open(tire)}
                               disabled={!isOwner}
-                              className="p-2 rounded-lg bg-bg-light text-text-muted hover:bg-danger hover:text-text-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
+                              className="p-2.5 rounded-lg bg-bg-light text-text-muted hover:bg-danger hover:text-text-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={18} />
                             </button>
                           </div>
                         </td>
@@ -778,13 +753,13 @@ export default function InventoryPage() {
               {totalPages > 1 && (
                 <div className="px-6 py-4 bg-bg-light border-t border-border-muted flex items-center justify-between">
                   <div className="text-sm text-text-muted">
-                    Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredInventory.length)} of {filteredInventory.length} items
+                    Showing {startIndex} to {endIndex} of {totalItems} items
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      onClick={handlePrevPage}
                       disabled={currentPage === 1}
                     >
                       <ChevronLeft size={16} />
@@ -795,7 +770,7 @@ export default function InventoryPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      onClick={handleNextPage}
                       disabled={currentPage === totalPages}
                     >
                       <ChevronRight size={16} />
@@ -808,8 +783,8 @@ export default function InventoryPage() {
         </div>
 
         {/* Delete Confirmation Dialog */}
-        {deleteConfirmId && deletingTire && (
-          <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && cancelDelete()}>
+        {deleteModal.data && (
+          <Dialog open={deleteModal.isOpen} onOpenChange={(open) => !open && deleteModal.close()}>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
@@ -830,17 +805,17 @@ export default function InventoryPage() {
 
                 <div className="rounded-lg p-4 bg-bg-light border border-border-muted">
                   <p className="font-semibold text-text mb-1">
-                    {deletingTire.brand} {deletingTire.model}
+                    {deleteModal.data.brand} {deleteModal.data.model}
                   </p>
                   <p className="text-sm text-text-muted">
-                    Size: {deletingTire.size} • Quantity: {deletingTire.quantity}
+                    Size: {deleteModal.data.size} • Quantity: {deleteModal.data.quantity}
                   </p>
                 </div>
 
                 <div className="flex gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={cancelDelete}
+                    onClick={() => deleteModal.close()}
                     className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors"
                   >
                     Cancel

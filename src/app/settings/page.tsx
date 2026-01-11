@@ -15,6 +15,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/lib/supabase/client';
 import { getShopSettingsMigrationSQL } from '@/lib/supabase/migrations';
 
+// Get supabase client ONCE outside component to prevent re-creation on renders
+const supabase = createClient();
+
 type SettingsTab = 'profile' | 'business' | 'preferences' | 'notifications' | 'security' | 'team';
 
 interface Invitation {
@@ -35,9 +38,8 @@ interface TeamMember {
 }
 
 export default function SettingsPage() {
-  const { user, profile, shop, refreshProfile, isOwner } = useAuth();
+  const { user, profile, shop, refreshProfile, isOwner, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const supabase = createClient();
 
   // Page state
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
@@ -404,6 +406,17 @@ export default function SettingsPage() {
   ];
 
   const visibleTabs = tabs.filter(tab => !tab.ownerOnly || isOwner);
+
+  // Early return while auth is loading
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-text-muted">Loading...</div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // Loading state
   if (pageLoading) {

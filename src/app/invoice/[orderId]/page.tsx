@@ -1,22 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Printer, ArrowLeft } from 'lucide-react';
+import { Loader2, Printer, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-interface OrderItem {
-  id: string;
-  quantity: number;
-  unit_price: number;
-  tire: {
-    brand: string;
-    model: string;
-    size: string;
-  };
-}
+import type { OrderItem } from '@/types/database';
 
 interface WorkOrder {
   id: string;
@@ -31,7 +21,7 @@ interface WorkOrder {
     email: string | null;
     phone: string;
     address: string | null;
-  };
+  } | null;
   work_order_items: OrderItem[];
 }
 
@@ -45,55 +35,141 @@ const SERVICE_PRICES: Record<string, number> = {
   installation: 15,
 };
 
+// Timeout for mobile networks (15 seconds)
+const FETCH_TIMEOUT_MS = 15000;
+
+// Get supabase client ONCE outside component to prevent re-creation on renders
+const supabase = createClient();
+
 export default function InvoicePage() {
   const params = useParams();
   const router = useRouter();
   const { shop } = useAuth();
-  const supabase = createClient();
 
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  const orderId = params.orderId as string;
+  // Track if component is mounted to prevent state updates after unmount
+  const isMounted = useRef(true);
 
-  useEffect(() => {
-    async function loadOrder() {
-      try {
-        const { data, error } = await supabase
-          .from('work_orders')
-          .select(`
+  // Get orderId safely - can be string, string[], or undefined on mobile
+  const orderId = typeof params?.orderId === 'string' ? params.orderId :
+                  Array.isArray(params?.orderId) ? params.orderId[0] : null;
+
+  const loadOrder = useCallback(async () => {
+    // Validate orderId before fetching
+    if (!orderId) {
+      setError('Invalid order ID');
+      setLoading(false);
+      return;
+    }
+
+    // UUID validation to fail fast
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(orderId)) {
+      setError('Invalid order ID format');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    try {
+      const { data, error: queryError } = await supabase
+        .from('work_orders')
+        .select(`
+          id,
+          service_type,
+          status,
+          scheduled_date,
+          notes,
+          total_amount,
+          created_at,
+          customer:customers(name, email, phone, address),
+          work_order_items(
             id,
-            service_type,
-            status,
-            scheduled_date,
-            notes,
-            total_amount,
-            created_at,
-            customer:customers(name, email, phone, address),
-            work_order_items(
-              id,
-              quantity,
-              unit_price,
-              tire:inventory(brand, model, size)
-            )
-          `)
-          .eq('id', orderId)
-          .single();
+            quantity,
+            unit_price,
+            tire:inventory(brand, model, size)
+          )
+        `)
+        .eq('id', orderId)
+        .abortSignal(controller.signal)
+        .single();
 
-        if (error) throw error;
-        setOrder(data as unknown as WorkOrder);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load order');
-      } finally {
+      clearTimeout(timeoutId);
+
+      if (!isMounted.current) return;
+
+      if (queryError) {
+        if (queryError.code === 'PGRST116') {
+          throw new Error('Order not found');
+        }
+        throw queryError;
+      }
+
+      if (!data) {
+        throw new Error('Order not found');
+      }
+
+      // Validate required nested data
+      if (!data.customer) {
+        throw new Error('Customer data not found for this order');
+      }
+
+      setOrder(data as unknown as WorkOrder);
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+
+      if (!isMounted.current) return;
+
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError('Request timed out. Please check your connection and try again.');
+        } else {
+          setError(err.message || 'Failed to load order');
+        }
+      } else {
+        setError('Failed to load order');
+      }
+    } finally {
+      if (isMounted.current) {
         setLoading(false);
       }
     }
+  }, [orderId]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Load order when orderId is available
+  useEffect(() => {
     if (orderId) {
       loadOrder();
+    } else if (params && !orderId) {
+      // params loaded but orderId is invalid
+      setError('Invalid order ID');
+      setLoading(false);
     }
-  }, [orderId, supabase]);
+    // If params is still loading (undefined), keep loading state
+  }, [orderId, loadOrder, params]);
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    loadOrder();
+  };
 
   const handlePrint = () => {
     window.print();
@@ -101,17 +177,57 @@ export default function InvoicePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-gray-500 text-sm text-center">Loading invoice...</p>
+        {/* Show timeout hint after a few seconds of loading */}
+        <p className="text-gray-400 text-xs mt-2 text-center max-w-xs">
+          If loading takes too long, check your internet connection
+        </p>
       </div>
     );
   }
 
   if (error || !order) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500 mb-4">{error || 'Order not found'}</p>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+            <AlertCircle className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to Load Invoice</h2>
+          <p className="text-red-500 mb-6">{error || 'Order not found'}</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={handleRetry}
+              className="gap-2"
+            >
+              <RefreshCw size={16} />
+              Try Again
+            </Button>
+            <Button onClick={() => router.back()}>Go Back</Button>
+          </div>
+          {retryCount > 0 && (
+            <p className="text-gray-400 text-xs mt-4">
+              Retry attempts: {retryCount}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Ensure customer data exists (TypeScript guard)
+  if (!order.customer) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-yellow-100 mb-4">
+            <AlertCircle className="w-8 h-8 text-yellow-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Incomplete Order Data</h2>
+          <p className="text-gray-500 mb-6">Customer information is missing for this order.</p>
           <Button onClick={() => router.back()}>Go Back</Button>
         </div>
       </div>
@@ -144,31 +260,32 @@ export default function InvoicePage() {
 
   return (
     <>
-      {/* Print-hidden controls */}
-      <div className="print:hidden fixed top-4 left-4 right-4 z-50 flex justify-between items-center bg-white p-4 rounded-xl shadow-xl border border-gray-200">
-        <Button variant="outline" onClick={() => router.back()} className="gap-2">
+      {/* Print-hidden controls - Mobile optimized */}
+      <div className="print:hidden fixed top-4 left-4 right-4 z-50 flex justify-between items-center bg-white p-3 sm:p-4 rounded-xl shadow-xl border border-gray-200">
+        <Button variant="outline" onClick={() => router.back()} className="gap-2 text-sm sm:text-base px-3 sm:px-4">
           <ArrowLeft size={16} />
-          Back
+          <span className="hidden sm:inline">Back</span>
         </Button>
-        <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 gap-2">
+        <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 gap-2 text-sm sm:text-base px-3 sm:px-4">
           <Printer size={16} />
-          Print / Save PDF
+          <span className="hidden sm:inline">Print / Save PDF</span>
+          <span className="sm:hidden">Print</span>
         </Button>
       </div>
 
-      {/* Invoice Content - Modern Minimal Design */}
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white p-8 pt-24 print:pt-8 print:bg-white">
+      {/* Invoice Content - Modern Minimal Design with Mobile Optimization */}
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white p-4 sm:p-8 pt-20 sm:pt-24 print:pt-8 print:bg-white">
         <div className="max-w-4xl mx-auto bg-white print:shadow-none shadow-2xl rounded-2xl print:rounded-none overflow-hidden">
           {/* Header with accent bar */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 h-2 print:h-1"></div>
 
-          <div className="p-12 print:p-8">
-            {/* Top Section */}
-            <div className="flex justify-between items-start mb-12">
+          <div className="p-4 sm:p-8 md:p-12 print:p-8">
+            {/* Top Section - Stack on mobile, row on desktop */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-6 mb-8 sm:mb-12">
               {/* Company Info */}
-              <div>
-                <h1 className="text-4xl font-bold text-gray-900 mb-3">{shop?.name || 'Tire Shop'}</h1>
-                <div className="space-y-1 text-gray-600">
+              <div className="order-2 sm:order-1">
+                <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2 sm:mb-3">{shop?.name || 'Tire Shop'}</h1>
+                <div className="space-y-1 text-sm sm:text-base text-gray-600">
                   {shop?.address && <p>{shop.address}</p>}
                   {shop?.phone && <p>{shop.phone}</p>}
                   {shop?.email && <p>{shop.email}</p>}
@@ -176,16 +293,16 @@ export default function InvoicePage() {
               </div>
 
               {/* Invoice Details */}
-              <div className="text-right">
-                <div className="inline-block bg-blue-50 px-6 py-3 rounded-lg mb-4">
-                  <h2 className="text-3xl font-bold text-blue-600">INVOICE</h2>
+              <div className="order-1 sm:order-2 sm:text-right">
+                <div className="inline-block bg-blue-50 px-4 sm:px-6 py-2 sm:py-3 rounded-lg mb-3 sm:mb-4">
+                  <h2 className="text-xl sm:text-3xl font-bold text-blue-600">INVOICE</h2>
                 </div>
                 <div className="space-y-1 text-sm">
-                  <div className="flex justify-between gap-8">
+                  <div className="flex justify-between sm:justify-end gap-4 sm:gap-8">
                     <span className="text-gray-500">Invoice #</span>
                     <span className="font-semibold text-gray-900">{invoiceNumber}</span>
                   </div>
-                  <div className="flex justify-between gap-8">
+                  <div className="flex justify-between sm:justify-end gap-4 sm:gap-8">
                     <span className="text-gray-500">Date</span>
                     <span className="font-semibold text-gray-900">{invoiceDate}</span>
                   </div>
@@ -219,13 +336,13 @@ export default function InvoicePage() {
                 </thead>
                 <tbody>
                   {/* Tire Items */}
-                  {order.work_order_items.map((item, index) => (
-                    <tr key={item.id} className={index !== order.work_order_items.length - 1 || servicePrice > 0 ? 'border-b border-gray-100' : ''}>
+                  {order.work_order_items.filter(item => item.tire).map((item, index, filteredItems) => (
+                    <tr key={item.id} className={index !== filteredItems.length - 1 || servicePrice > 0 ? 'border-b border-gray-100' : ''}>
                       <td className="py-5">
                         <p className="font-semibold text-gray-900 text-base">
-                          {item.tire.brand} {item.tire.model}
+                          {item.tire!.brand} {item.tire!.model}
                         </p>
-                        <p className="text-sm text-gray-500 mt-1">{item.tire.size}</p>
+                        <p className="text-sm text-gray-500 mt-1">{item.tire!.size}</p>
                       </td>
                       <td className="text-center py-5 text-gray-900 font-medium">{item.quantity}</td>
                       <td className="text-right py-5 text-gray-700">

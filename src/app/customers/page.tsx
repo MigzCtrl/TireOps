@@ -3,62 +3,97 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Users, Plus, Search, Edit, Eye, Trash2, UserPlus, Calendar, ShoppingBag, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import Link from 'next/link';
+import { Users, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSort, useFilters, useModal } from '@/hooks';
 import { customerSchema, sanitizeInput } from '@/lib/validations/schemas';
+import type { Customer } from '@/types/database';
+import { CustomerList } from './_components/CustomerList';
+import { CustomerForm } from './_components/CustomerForm';
+import { CustomerFilters } from './_components/CustomerFilters';
+import { DeleteConfirmDialog } from './_components/DeleteConfirmDialog';
 
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  created_at: string;
-  order_count?: number;
-}
+// Get supabase client ONCE outside component to prevent re-creation on renders
+const supabase = createClient();
 
-interface WorkOrder {
+// Minimal WorkOrder type for counting purposes
+interface WorkOrderBasic {
   id: string;
   customer_id: string;
 }
 
 type SortField = 'name' | 'email' | 'phone' | 'created_at' | 'order_count';
-type SortDirection = 'asc' | 'desc';
 
 export default function CustomersPage() {
   const { profile, canEdit, canDelete, loading: authLoading } = useAuth();
   const { toast } = useToast();
+
+  // Data state
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [workOrders, setWorkOrders] = useState<WorkOrderBasic[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
-  const [sortField, setSortField] = useState<SortField>('created_at');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [newThisWeekCount, setNewThisWeekCount] = useState(0);
   const ITEMS_PER_PAGE = 10;
+
+  // Modals
+  const formModal = useModal<string | null>(); // editingId
+  const deleteModal = useModal<Customer>();
+
+  // Form state
   const [formData, setFormData] = useState({
-    name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
     address: '',
   });
 
-  const supabase = createClient();
+  // Vehicle form state
+  const [vehicleData, setVehicleData] = useState({
+    year: '',
+    make: '',
+    model: '',
+    trim: '',
+    tire_size: '',
+  });
+  const [showVehicleSection, setShowVehicleSection] = useState(false);
+
+  // Search and filter hooks
+  const { filteredData: searchFilteredData, searchTerm, setSearchTerm } = useFilters(
+    customers,
+    (customer, search) =>
+      customer.name.toLowerCase().includes(search.toLowerCase()) ||
+      (customer.email?.toLowerCase().includes(search.toLowerCase()) || false) ||
+      (customer.phone?.includes(search) || false)
+  );
+
+  // Apply custom filter type (new, active, inactive)
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const typeFilteredData = searchFilteredData.filter((customer) => {
+    if (filterType === 'new') {
+      if (!customer.created_at) return false;
+      return new Date(customer.created_at) >= oneWeekAgo;
+    } else if (filterType === 'active') {
+      return (customer.order_count || 0) > 0;
+    } else if (filterType === 'inactive') {
+      return (customer.order_count || 0) === 0;
+    }
+    return true; // 'all'
+  });
+
+  // Sort hook
+  const { sortedData, sortField, sortDirection, toggleSort } = useSort<Customer, SortField>(
+    typeFilteredData,
+    'created_at',
+    'desc'
+  );
 
   useEffect(() => {
     if (!profile?.shop_id) return;
@@ -137,10 +172,16 @@ export default function CustomersPage() {
     e.preventDefault();
     if (!profile?.shop_id) return;
 
+    const editingId = formModal.data;
+
     try {
       // Sanitize inputs to prevent XSS
+      const sanitizedFirstName = sanitizeInput(formData.first_name);
+      const sanitizedLastName = sanitizeInput(formData.last_name);
       const sanitizedData = {
-        name: sanitizeInput(formData.name),
+        first_name: sanitizedFirstName,
+        last_name: sanitizedLastName,
+        name: `${sanitizedFirstName} ${sanitizedLastName}`.trim(),
         email: sanitizeInput(formData.email),
         phone: sanitizeInput(formData.phone),
         address: sanitizeInput(formData.address),
@@ -160,10 +201,18 @@ export default function CustomersPage() {
         return;
       }
 
+      // Prepare data for database (only include fields that exist in DB)
+      const dbData = {
+        name: validationResult.data.name || `${validationResult.data.first_name} ${validationResult.data.last_name}`,
+        email: validationResult.data.email,
+        phone: validationResult.data.phone,
+        address: validationResult.data.address,
+      };
+
       if (editingId) {
         const { error } = await supabase
           .from('customers')
-          .update(validationResult.data)
+          .update(dbData)
           .eq('id', editingId)
           .eq('shop_id', profile.shop_id);
         if (error) throw error;
@@ -174,21 +223,48 @@ export default function CustomersPage() {
         });
       } else {
         const customerData = {
-          ...validationResult.data,
+          ...dbData,
           shop_id: profile.shop_id,
         };
-        const { error } = await supabase.from('customers').insert([customerData]);
+        const { data: newCustomer, error } = await supabase
+          .from('customers')
+          .insert([customerData])
+          .select('id')
+          .single();
         if (error) throw error;
+
+        // If vehicle data was provided, save it
+        if (showVehicleSection && vehicleData.year && vehicleData.make && vehicleData.model && newCustomer) {
+          const vehiclePayload = {
+            customer_id: newCustomer.id,
+            year: parseInt(vehicleData.year),
+            make: vehicleData.make.trim(),
+            model: vehicleData.model.trim(),
+            trim: vehicleData.trim.trim() || null,
+            recommended_tire_size: vehicleData.tire_size || null,
+          };
+
+          const { error: vehicleError } = await supabase
+            .from('customer_vehicles')
+            .insert([vehiclePayload]);
+
+          if (vehicleError) {
+            console.error('Error saving vehicle:', vehicleError);
+            // Don't fail the whole operation, just log it
+          }
+        }
 
         toast({
           title: "Success!",
-          description: "Customer created successfully",
+          description: showVehicleSection && vehicleData.make ? "Customer and vehicle created successfully" : "Customer created successfully",
         });
       }
 
-      setFormData({ name: '', email: '', phone: '', address: '' });
-      setShowForm(false);
-      setEditingId(null);
+      // Reset all form data
+      setFormData({ first_name: '', last_name: '', email: '', phone: '', address: '' });
+      setVehicleData({ year: '', make: '', model: '', trim: '', tire_size: '' });
+      setShowVehicleSection(false);
+      formModal.close();
       loadData();
     } catch (error) {
       console.error('Error saving customer:', error);
@@ -201,34 +277,29 @@ export default function CustomersPage() {
   }
 
   function startEdit(customer: Customer) {
+    // Split existing name into first and last (use first space as separator)
+    const nameParts = customer.name.trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     setFormData({
-      name: customer.name,
+      first_name: firstName,
+      last_name: lastName,
       email: customer.email || '',
-      phone: customer.phone,
+      phone: customer.phone || '',
       address: customer.address || '',
     });
-    setEditingId(customer.id);
-    setShowForm(true);
-  }
-
-  function openDeleteModal(customer: Customer) {
-    setCustomerToDelete(customer);
-    setDeleteModalOpen(true);
-  }
-
-  function closeDeleteModal() {
-    setDeleteModalOpen(false);
-    setCustomerToDelete(null);
+    formModal.open(customer.id);
   }
 
   async function confirmDelete() {
-    if (!customerToDelete || !profile?.shop_id) return;
+    if (!deleteModal.data || !profile?.shop_id) return;
 
     try {
       const { error } = await supabase
         .from('customers')
         .delete()
-        .eq('id', customerToDelete.id)
+        .eq('id', deleteModal.data.id)
         .eq('shop_id', profile.shop_id);
       if (error) throw error;
 
@@ -236,7 +307,7 @@ export default function CustomersPage() {
         title: "Success!",
         description: "Customer deleted successfully",
       });
-      closeDeleteModal();
+      deleteModal.close();
       loadData();
     } catch (error) {
       console.error('Error deleting customer:', error);
@@ -248,72 +319,20 @@ export default function CustomersPage() {
     }
   }
 
-  function handleSort(field: SortField) {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
+  function handleCancelForm() {
+    formModal.close();
+    setFormData({ first_name: '', last_name: '', email: '', phone: '', address: '' });
+    setVehicleData({ year: '', make: '', model: '', trim: '', tire_size: '' });
+    setShowVehicleSection(false);
   }
 
   // Calculate stats
-  const now = new Date();
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
   const stats = {
     total: totalCount,
     newThisWeek: newThisWeekCount,
     active: customers.filter(c => (c.order_count || 0) > 0).length,
     totalOrders: workOrders.length,
   };
-
-  // Filter customers
-  const filteredCustomers = customers.filter((customer) => {
-    // Filter type
-    if (filterType === 'new') {
-      const joinDate = new Date(customer.created_at);
-      if (joinDate < oneWeekAgo) return false;
-    } else if (filterType === 'active') {
-      if ((customer.order_count || 0) === 0) return false;
-    } else if (filterType === 'inactive') {
-      if ((customer.order_count || 0) > 0) return false;
-    }
-
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      const matchesName = customer.name.toLowerCase().includes(search);
-      const matchesEmail = customer.email?.toLowerCase().includes(search);
-      const matchesPhone = customer.phone.includes(search);
-      if (!matchesName && !matchesEmail && !matchesPhone) return false;
-    }
-
-    return true;
-  });
-
-  // Sort customers
-  const sortedCustomers = [...filteredCustomers].sort((a, b) => {
-    let aVal: any = a[sortField];
-    let bVal: any = b[sortField];
-
-    // Handle null/undefined values
-    if (aVal === null || aVal === undefined) return 1;
-    if (bVal === null || bVal === undefined) return -1;
-
-    // Convert to comparable values
-    if (sortField === 'created_at') {
-      aVal = new Date(aVal).getTime();
-      bVal = new Date(bVal).getTime();
-    } else if (typeof aVal === 'string') {
-      aVal = aVal.toLowerCase();
-      bVal = bVal.toLowerCase();
-    }
-
-    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-    return 0;
-  });
 
   if (authLoading) {
     return (
@@ -360,7 +379,7 @@ export default function CustomersPage() {
             </p>
           </div>
 
-          <Dialog open={showForm} onOpenChange={setShowForm}>
+          <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
             <DialogTrigger asChild>
               <button
                 disabled={!canEdit}
@@ -373,82 +392,24 @@ export default function CustomersPage() {
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>
-                  {editingId ? 'Edit Customer' : 'Add New Customer'}
+                  {formModal.data ? 'Edit Customer' : 'Add New Customer'}
                 </DialogTitle>
                 <DialogDescription>
-                  {editingId ? 'Update customer information.' : 'Add a new customer to your database.'}
+                  {formModal.data ? 'Update customer information.' : 'Add a new customer to your database.'}
                 </DialogDescription>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name *</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="John Doe"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone *</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      required
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="(555) 123-4567"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="john@example.com"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Input
-                      id="address"
-                      type="text"
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      placeholder="123 Main St"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 justify-end pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowForm(false);
-                      setFormData({ name: '', email: '', phone: '', address: '' });
-                      setEditingId(null);
-                    }}
-                    className="px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-danger hover:text-text-muted transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors"
-                  >
-                    {editingId ? 'Update Customer' : 'Add Customer'}
-                  </button>
-                </div>
-              </form>
+              <CustomerForm
+                formData={formData}
+                onFormDataChange={setFormData}
+                vehicleData={vehicleData}
+                onVehicleDataChange={setVehicleData}
+                showVehicleSection={showVehicleSection}
+                onToggleVehicleSection={() => setShowVehicleSection(!showVehicleSection)}
+                isEditing={!!formModal.data}
+                onSubmit={handleSubmit}
+                onCancel={handleCancelForm}
+              />
             </DialogContent>
           </Dialog>
         </div>
@@ -496,36 +457,16 @@ export default function CustomersPage() {
         </div>
 
         {/* Search and Filters */}
-        <div className="bg-bg border border-border-muted rounded-lg shadow-md p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
-              <Input
-                type="text"
-                placeholder="Search by name, email, or phone..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-bg-light border-border-muted"
-              />
-            </div>
-
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="bg-bg-light border-border-muted">
-                <SelectValue placeholder="Filter customers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Customers</SelectItem>
-                <SelectItem value="new">New This Week</SelectItem>
-                <SelectItem value="active">Active (Has Orders)</SelectItem>
-                <SelectItem value="inactive">Inactive (No Orders)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        <CustomerFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          filterType={filterType}
+          onFilterChange={setFilterType}
+        />
 
         {/* Table */}
         <div className="bg-bg border border-border-muted rounded-lg shadow-md overflow-hidden">
-          {sortedCustomers.length === 0 ? (
+          {sortedData.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-text-muted">
                 {customers.length === 0
@@ -534,134 +475,16 @@ export default function CustomersPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-bg-light border-b border-border-muted">
-                  <tr>
-                    <th
-                      className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider cursor-pointer hover:bg-bg-light/80"
-                      onClick={() => handleSort('name')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Name
-                        {sortField === 'name' && (
-                          sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th
-                      className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider cursor-pointer hover:bg-bg-light/80"
-                      onClick={() => handleSort('email')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Email
-                        {sortField === 'email' && (
-                          sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th
-                      className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider cursor-pointer hover:bg-bg-light/80"
-                      onClick={() => handleSort('phone')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Phone
-                        {sortField === 'phone' && (
-                          sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th
-                      className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider cursor-pointer hover:bg-bg-light/80"
-                      onClick={() => handleSort('created_at')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Join Date
-                        {sortField === 'created_at' && (
-                          sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th
-                      className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider cursor-pointer hover:bg-bg-light/80"
-                      onClick={() => handleSort('order_count')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Orders
-                        {sortField === 'order_count' && (
-                          sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                        )}
-                      </div>
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-bg divide-y divide-border-muted">
-                  {sortedCustomers.map((customer, index) => (
-                    <tr
-                      key={customer.id}
-                      className="hover:bg-bg-light transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-text">{customer.name}</div>
-                        {customer.address && (
-                          <div className="text-xs text-text-muted">{customer.address}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-text">{customer.email || '-'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-text">{customer.phone}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-text">
-                          {new Date(customer.created_at).toLocaleDateString()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-text">
-                          {customer.order_count || 0}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link href={`/customers/${customer.id}`}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-text-muted hover:text-text hover:bg-bg-light"
-                            >
-                              <Eye size={16} />
-                            </Button>
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={!canEdit}
-                            onClick={() => startEdit(customer)}
-                            className="h-8 w-8 text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Edit size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={!canDelete}
-                            onClick={() => openDeleteModal(customer)}
-                            className="h-8 w-8 text-danger hover:bg-danger/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <CustomerList
+              customers={sortedData}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={toggleSort}
+              onEdit={startEdit}
+              onDelete={(customer) => deleteModal.open(customer)}
+              canEdit={canEdit}
+              canDelete={canDelete}
+            />
           )}
 
           {/* Pagination Controls */}
@@ -700,55 +523,12 @@ export default function CustomersPage() {
         </div>
 
         {/* Delete Confirmation Dialog */}
-        {deleteModalOpen && customerToDelete && (
-          <Dialog open={deleteModalOpen} onOpenChange={(open) => !open && closeDeleteModal()}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-danger/20">
-                    <Trash2 size={20} className="text-danger" />
-                  </div>
-                  Delete Customer?
-                </DialogTitle>
-                <DialogDescription>
-                  This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <p className="text-sm text-text-muted">
-                  Are you sure you want to delete <span className="font-semibold text-text">{customerToDelete.name}</span>?
-                  This action cannot be undone and will permanently remove all associated data.
-                </p>
-
-                {(customerToDelete.order_count || 0) > 0 && (
-                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/30">
-                    <p className="text-sm text-warning">
-                      <strong>Warning:</strong> This customer has {customerToDelete.order_count} order(s). Deleting them may affect work order records.
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={closeDeleteModal}
-                    className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmDelete}
-                    className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-danger hover:text-text-muted transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
+        <DeleteConfirmDialog
+          isOpen={deleteModal.isOpen}
+          customer={deleteModal.data || null}
+          onClose={() => deleteModal.close()}
+          onConfirm={confirmDelete}
+        />
       </div>
     </DashboardLayout>
   );

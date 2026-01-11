@@ -84,8 +84,8 @@ function SignupForm() {
           } else {
             router.push('/');
           }
-          router.refresh();
         }, 1500);
+        return; // Keep loading state true during redirect
       }
     } catch (err: any) {
       setError(err.message || 'Failed to sign up');

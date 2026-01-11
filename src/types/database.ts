@@ -37,6 +37,7 @@ export interface Customer extends BaseRecord {
   address?: string;
   tire_size?: string;
   notes?: string;
+  order_count?: number;
 }
 
 // Inventory item (tire)
@@ -174,3 +175,34 @@ export interface WorkOrderFilters {
   searchTerm: string;
   dateRange: string;
 }
+
+// Vehicle
+export interface Vehicle extends BaseRecord {
+  shop_id?: string;
+  customer_id: string;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  trim: string | null;
+  tire_size: string | null;
+  recommended_tire_size?: string;
+  plate: string | null;
+  vin: string | null;
+  notes: string | null;
+  customer?: Customer;
+}
+
+// Order items
+export interface OrderItem {
+  id: string;
+  quantity: number;
+  unit_price: number;
+  tire: {
+    brand: string;
+    model: string;
+    size: string;
+  } | null;
+}
+
+// Alternative Tire interface (alias for InventoryItem)
+export type Tire = InventoryItem;

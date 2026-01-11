@@ -116,7 +116,7 @@ export default function Dropdown({
                   )}
                 </div>
                 {value === option.value && (
-                  <Check size={compact ? 14 : 18} className="text-blue-500 dark:text-blue-400 flex-shrink-0" />
+                  <Check size={compact ? 14 : 18} className="text-primary flex-shrink-0" />
                 )}
               </div>
             ))}

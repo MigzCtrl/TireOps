@@ -210,15 +210,16 @@ export default function AcceptInvitePage() {
         </p>
 
         {user?.email?.toLowerCase() !== invitation?.email.toLowerCase() && (
-          <div className="mb-6 p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning">
-            This invite was sent to {invitation?.email}. You're signed in as {user?.email}.
+          <div className="mb-6 p-3 rounded-lg bg-danger/10 border border-danger/30 text-sm text-danger">
+            <strong>Email Mismatch:</strong> This invite was sent to {invitation?.email}, but you're signed in as {user?.email}.
+            Please log out and sign in with the correct email address to accept this invitation.
           </div>
         )}
 
         <Button
           onClick={handleAccept}
-          disabled={accepting}
-          className="w-full bg-primary hover:bg-primary/90"
+          disabled={accepting || user?.email?.toLowerCase() !== invitation?.email.toLowerCase()}
+          className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {accepting ? (
             <>

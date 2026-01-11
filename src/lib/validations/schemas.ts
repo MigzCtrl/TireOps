@@ -5,11 +5,23 @@ import { z } from 'zod';
 // ==========================================
 
 export const customerSchema = z.object({
+  first_name: z
+    .string()
+    .min(1, 'First name is required')
+    .max(50, 'First name must be less than 50 characters')
+    .trim(),
+  last_name: z
+    .string()
+    .min(1, 'Last name is required')
+    .max(50, 'Last name must be less than 50 characters')
+    .trim(),
+  // Combined name field for database storage (computed from first + last)
   name: z
     .string()
     .min(1, 'Name is required')
     .max(100, 'Name must be less than 100 characters')
-    .trim(),
+    .trim()
+    .optional(),
   email: z
     .string()
     .email('Invalid email address')

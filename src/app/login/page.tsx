@@ -30,8 +30,8 @@ export default function LoginPage() {
       if (signInError) throw signInError;
 
       if (data.user) {
+        // CRITICAL FIX: Only push, middleware will handle the rest
         router.push('/');
-        router.refresh();
       }
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
@@ -41,7 +41,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-bg-light to-bg flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -53,14 +53,14 @@ export default function LoginPage() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.1 }}
-            className="inline-block p-4 bg-blue-600 rounded-2xl mb-4"
+            className="inline-block p-4 bg-primary rounded-2xl mb-4"
           >
-            <Lock className="text-white" size={40} />
+            <Lock className="text-primary-foreground" size={40} />
           </motion.div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-3xl font-bold text-text mb-2">
             Big Boy Tires
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-text-muted">
             Sign in to manage your tire shop
           </p>
         </div>
@@ -70,17 +70,17 @@ export default function LoginPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-200 dark:border-gray-700"
+          className="bg-bg rounded-2xl shadow-xl p-8 border border-border-muted"
         >
           <form onSubmit={handleLogin} className="space-y-6">
             {/* Email Field */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-text mb-2">
                 Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="text-gray-400" size={20} />
+                  <User className="text-text-muted" size={20} />
                 </div>
                 <input
                   type="email"
@@ -88,19 +88,19 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   placeholder="admin@tireshop.com"
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-border-muted bg-bg-light text-text focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
                 />
               </div>
             </div>
 
             {/* Password Field */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-text mb-2">
                 Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="text-gray-400" size={20} />
+                  <Lock className="text-text-muted" size={20} />
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -108,7 +108,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="Enter your password"
-                  className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full pl-10 pr-12 py-3 rounded-lg border border-border-muted bg-bg-light text-text focus:ring-2 focus:ring-primary focus:border-transparent transition-colors"
                 />
                 <button
                   type="button"
@@ -116,9 +116,9 @@ export default function LoginPage() {
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showPassword ? (
-                    <EyeOff className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" size={20} />
+                    <EyeOff className="text-text-muted hover:text-text" size={20} />
                   ) : (
-                    <Eye className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" size={20} />
+                    <Eye className="text-text-muted hover:text-text" size={20} />
                   )}
                 </button>
               </div>
@@ -129,9 +129,9 @@ export default function LoginPage() {
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                className="p-3 bg-danger/10 border border-danger rounded-lg"
               >
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                <p className="text-sm text-danger">{error}</p>
               </motion.div>
             )}
 
@@ -139,7 +139,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-medium hover:bg-primary/90 focus:ring-4 focus:ring-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
@@ -153,8 +153,8 @@ export default function LoginPage() {
           </form>
 
           {/* Sign Up Link */}
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-800 dark:text-blue-300 text-center">
+          <div className="mt-6 p-4 bg-primary/10 rounded-lg border border-primary">
+            <p className="text-sm text-primary text-center">
               Don't have an account?{' '}
               <Link href="/register" className="font-semibold hover:underline">
                 Sign up
@@ -164,7 +164,7 @@ export default function LoginPage() {
         </motion.div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
+        <p className="text-center text-sm text-text-muted mt-6">
           Secure admin access powered by Supabase Auth
         </p>
       </motion.div>
