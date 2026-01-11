@@ -1,4 +1,4 @@
-# Tire Shop MVP
+# TireOps
 
 A modern, multi-tenant SaaS web application for tire shop owners to manage their entire business operations.
 
@@ -84,7 +84,7 @@ A modern, multi-tenant SaaS web application for tire shop owners to manage their
 ## Project Structure
 
 ```
-tire-shop-mvp/
+tireops/
 ├── src/
 │   ├── app/                      # Next.js App Router pages
 │   │   ├── actions/              # Server Actions
@@ -197,8 +197,8 @@ See [SCHEMA.md](./supabase/SCHEMA.md) for complete database documentation.
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/MigzCtrl/tire-shop-mvp.git
-cd tire-shop-mvp
+git clone https://github.com/MigzCtrl/tireops.git
+cd tireops
 ```
 
 2. **Install dependencies**
