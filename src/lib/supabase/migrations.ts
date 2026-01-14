@@ -90,3 +90,64 @@ ADD COLUMN IF NOT EXISTS email_notifications BOOLEAN DEFAULT true,
 ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER DEFAULT 10;
   `.trim();
 }
+
+/**
+ * Get migration SQL for onboarding column
+ */
+export function getOnboardingMigrationSQL(): string {
+  return `
+-- Run this in Supabase SQL Editor to add onboarding support
+
+ALTER TABLE shops
+ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT false;
+
+-- Update existing shops to mark onboarding as completed (they're already set up)
+UPDATE shops SET onboarding_completed = true WHERE onboarding_completed IS NULL;
+  `.trim();
+}
+
+/**
+ * Get migration SQL for booking columns
+ */
+export function getBookingMigrationSQL(): string {
+  return `
+-- Run this in Supabase SQL Editor to add online booking support
+
+-- Add slug column for public booking URLs
+ALTER TABLE shops
+ADD COLUMN IF NOT EXISTS slug VARCHAR(100) UNIQUE;
+
+-- Add booking enabled flag
+ALTER TABLE shops
+ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN DEFAULT false;
+
+-- Add booking settings (JSON)
+ALTER TABLE shops
+ADD COLUMN IF NOT EXISTS booking_settings JSONB DEFAULT '{
+  "business_hours": {
+    "monday": {"open": "08:00", "close": "17:00", "enabled": true},
+    "tuesday": {"open": "08:00", "close": "17:00", "enabled": true},
+    "wednesday": {"open": "08:00", "close": "17:00", "enabled": true},
+    "thursday": {"open": "08:00", "close": "17:00", "enabled": true},
+    "friday": {"open": "08:00", "close": "17:00", "enabled": true},
+    "saturday": {"open": "09:00", "close": "14:00", "enabled": true},
+    "sunday": {"open": "00:00", "close": "00:00", "enabled": false}
+  },
+  "slot_duration": 60,
+  "buffer_time": 15,
+  "max_days_ahead": 30,
+  "services": ["Tire Installation", "Tire Rotation", "Tire Repair", "Wheel Alignment", "Tire Balance"]
+}'::jsonb;
+
+-- Generate slugs for existing shops (based on name)
+UPDATE shops
+SET slug = LOWER(REGEXP_REPLACE(name, '[^a-zA-Z0-9]+', '-', 'g'))
+WHERE slug IS NULL;
+
+-- Create index for slug lookups
+CREATE INDEX IF NOT EXISTS idx_shops_slug ON shops(slug);
+
+-- Stripe customer ID for billing
+ALTER TABLE shops ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255);
+  `.trim();
+}

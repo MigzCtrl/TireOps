@@ -15,6 +15,17 @@ export interface Profile {
   updated_at: string
 }
 
+// Booking settings type
+export interface BookingSettings {
+  business_hours: {
+    [key: string]: { open: string; close: string; enabled: boolean }
+  }
+  slot_duration: number // minutes
+  buffer_time: number // minutes between appointments
+  max_days_ahead: number // how far ahead customers can book
+  services: string[] // available services for booking
+}
+
 // Shop type
 export interface Shop {
   id: string
@@ -27,6 +38,10 @@ export interface Shop {
   currency: string | null
   email_notifications: boolean | null
   low_stock_threshold: number | null
+  onboarding_completed: boolean | null
+  slug: string | null
+  booking_enabled: boolean | null
+  booking_settings: BookingSettings | null
   created_at: string
   updated_at: string
 }
@@ -42,6 +57,7 @@ export interface AuthContextType {
   isOwner: boolean  // true if owner
   isStaff: boolean  // true if staff
   isViewer: boolean  // true if viewer
+  needsOnboarding: boolean  // true if onboarding not completed
   refreshProfile: () => Promise<void>
 }
 
@@ -171,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isOwner: profile?.role === 'owner',
       isStaff: profile?.role === 'staff',
       isViewer: profile?.role === 'viewer',
+      needsOnboarding: profile?.role === 'owner' && shop?.onboarding_completed !== true,
       refreshProfile,
     }),
     [user, profile, shop, loading]

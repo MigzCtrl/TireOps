@@ -27,7 +27,7 @@ interface SearchResult {
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, profile, shop } = useAuth();
+  const { user, profile, shop, needsOnboarding, loading: authLoading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
@@ -170,6 +170,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  // Redirect to onboarding if needed (only for owners who haven't completed it)
+  useEffect(() => {
+    // Wait for auth to finish loading before checking onboarding
+    if (!authLoading && needsOnboarding && pathname !== '/onboarding') {
+      router.push('/onboarding');
+    }
+  }, [authLoading, needsOnboarding, pathname, router]);
 
   // Prevent body scroll when mobile menu is open
   useEffect(() => {

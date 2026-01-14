@@ -10,12 +10,31 @@ export interface BaseRecord {
   updated_at?: string;
 }
 
+// Booking settings type
+export interface BookingSettings {
+  business_hours: {
+    [key: string]: { open: string; close: string; enabled: boolean }
+  };
+  slot_duration: number;
+  buffer_time: number;
+  max_days_ahead: number;
+  services: string[];
+}
+
 // Shop (tenant)
 export interface Shop extends BaseRecord {
   name: string;
   address?: string;
   phone?: string;
   email?: string;
+  tax_rate?: number;
+  currency?: string;
+  email_notifications?: boolean;
+  low_stock_threshold?: number;
+  onboarding_completed?: boolean;
+  slug?: string;
+  booking_enabled?: boolean;
+  booking_settings?: BookingSettings;
 }
 
 // User profile

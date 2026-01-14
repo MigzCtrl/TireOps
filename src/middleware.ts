@@ -33,12 +33,18 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Public routes that don't require authentication
-  const publicPaths = ['/login', '/register', '/signup', '/invite'];
-  const isPublicPath = publicPaths.some(
-    (path) =>
-      request.nextUrl.pathname === path ||
-      request.nextUrl.pathname.startsWith(path + '/')
-  );
+  const publicPaths = ['/login', '/register', '/signup', '/invite', '/terms', '/privacy', '/pricing', '/book'];
+  const isPublicPath =
+    request.nextUrl.pathname === '/' || // Landing page
+    publicPaths.some(
+      (path) =>
+        request.nextUrl.pathname === path ||
+        request.nextUrl.pathname.startsWith(path + '/')
+    );
+
+  // Onboarding route (requires auth but separate flow)
+  const isOnboardingPath = request.nextUrl.pathname === '/onboarding' ||
+    request.nextUrl.pathname.startsWith('/onboarding/');
 
   // Redirect to login if not authenticated and not on a public path
   if (!user && !isPublicPath) {

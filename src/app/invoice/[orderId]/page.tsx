@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Printer, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, Printer, ArrowLeft, RefreshCw, AlertCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { OrderItem } from '@/types/database';
+import html2pdf from 'html2pdf.js';
 
 interface WorkOrder {
   id: string;
@@ -175,6 +176,43 @@ export default function InvoicePage() {
     window.print();
   };
 
+  const invoiceRef = useRef<HTMLDivElement>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!invoiceRef.current || !order) return;
+
+    setDownloadingPdf(true);
+    try {
+      const invoiceNumber = `INV-${order.id.slice(0, 8).toUpperCase()}`;
+      const element = invoiceRef.current;
+
+      const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `${invoiceNumber}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        },
+        jsPDF: {
+          unit: 'in',
+          format: 'letter',
+          orientation: 'portrait' as const
+        },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+
+      await html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -266,16 +304,31 @@ export default function InvoicePage() {
           <ArrowLeft size={16} />
           <span className="hidden sm:inline">Back</span>
         </Button>
-        <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 gap-2 text-sm sm:text-base px-3 sm:px-4">
-          <Printer size={16} />
-          <span className="hidden sm:inline">Print / Save PDF</span>
-          <span className="sm:hidden">Print</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="gap-2 text-sm sm:text-base px-3 sm:px-4"
+          >
+            {downloadingPdf ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Download size={16} />
+            )}
+            <span className="hidden sm:inline">Download PDF</span>
+            <span className="sm:hidden">PDF</span>
+          </Button>
+          <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 gap-2 text-sm sm:text-base px-3 sm:px-4">
+            <Printer size={16} />
+            <span className="hidden sm:inline">Print</span>
+          </Button>
+        </div>
       </div>
 
       {/* Invoice Content - Modern Minimal Design with Mobile Optimization */}
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white p-4 sm:p-8 pt-20 sm:pt-24 print:pt-8 print:bg-white">
-        <div className="max-w-4xl mx-auto bg-white print:shadow-none shadow-2xl rounded-2xl print:rounded-none overflow-hidden">
+        <div ref={invoiceRef} className="max-w-4xl mx-auto bg-white print:shadow-none shadow-2xl rounded-2xl print:rounded-none overflow-hidden">
           {/* Header with accent bar */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 h-2 print:h-1"></div>
 
@@ -413,19 +466,6 @@ export default function InvoicePage() {
         </div>
       </div>
 
-      {/* Print Styles */}
-      <style jsx global>{`
-        @media print {
-          body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          @page {
-            margin: 0.5in;
-            size: letter;
-          }
-        }
-      `}</style>
     </>
   );
 }

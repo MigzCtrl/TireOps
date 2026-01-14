@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Settings, User, Building2, Palette, Bell, Lock, Save,
   Loader2, Check, AlertCircle, Eye, EyeOff, Moon, Sun, AlertTriangle,
-  Users, Mail, Trash2, Copy, UserPlus
+  Users, Mail, Trash2, Copy, UserPlus, Calendar, Link, ExternalLink
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import { getShopSettingsMigrationSQL } from '@/lib/supabase/migrations';
 // Get supabase client ONCE outside component to prevent re-creation on renders
 const supabase = createClient();
 
-type SettingsTab = 'profile' | 'business' | 'preferences' | 'notifications' | 'security' | 'team';
+type SettingsTab = 'profile' | 'business' | 'preferences' | 'notifications' | 'security' | 'team' | 'booking';
 
 interface Invitation {
   id: string;
@@ -61,6 +61,12 @@ export default function SettingsPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteForm, setInviteForm] = useState({ email: '', role: 'staff' as 'staff' | 'viewer' });
   const [inviteLoading, setInviteLoading] = useState(false);
+
+  // Booking state
+  const [bookingForm, setBookingForm] = useState({
+    slug: '',
+    booking_enabled: false,
+  });
 
   // Initialize data with timeout
   useEffect(() => {
@@ -109,6 +115,12 @@ export default function SettingsPage() {
       // Theme from localStorage
       const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
       if (savedTheme) setTheme(savedTheme);
+
+      // Booking
+      setBookingForm({
+        slug: shop.slug || '',
+        booking_enabled: shop.booking_enabled ?? false,
+      });
 
       setPageLoading(false);
       clearTimeout(timeout);
@@ -395,10 +407,47 @@ export default function SettingsPage() {
     toast({ title: "Link copied!" });
   }, [toast]);
 
+  // Save booking settings
+  const handleSaveBooking = useCallback(async () => {
+    if (!shop || !isOwner) return;
+    setSaving('booking');
+
+    try {
+      // Generate slug from shop name if not set
+      let slug = bookingForm.slug.trim();
+      if (!slug && bookingForm.booking_enabled) {
+        slug = shop.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+      }
+
+      const { error } = await supabase
+        .from('shops')
+        .update({
+          slug: slug || null,
+          booking_enabled: bookingForm.booking_enabled,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', shop.id);
+
+      if (error) throw error;
+
+      setBookingForm(prev => ({ ...prev, slug }));
+      await refreshProfile();
+      toast({ title: "Saved!", description: "Booking settings updated" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to save" });
+    } finally {
+      setSaving(null);
+    }
+  }, [shop, isOwner, bookingForm, supabase, refreshProfile, toast]);
+
   // Tab config
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
     { id: 'business' as const, label: 'Business', icon: Building2, ownerOnly: true },
+    { id: 'booking' as const, label: 'Booking', icon: Calendar, ownerOnly: true },
     { id: 'preferences' as const, label: 'Preferences', icon: Palette, ownerOnly: true },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell, ownerOnly: true },
     { id: 'team' as const, label: 'Team', icon: Users, ownerOnly: true },
@@ -578,6 +627,102 @@ export default function SettingsPage() {
                   <div className="pt-4 border-t border-border-muted">
                     <Button onClick={handleSaveBusiness} disabled={saving === 'business'} className="bg-primary hover:bg-primary/90">
                       {saving === 'business' ? <Loader2 size={16} className="animate-spin mr-2" /> : <Save size={16} className="mr-2" />}
+                      Save Changes
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Booking Tab */}
+              {activeTab === 'booking' && isOwner && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-text">Online Booking</h2>
+                    <p className="text-sm text-text-muted">Let customers book appointments online</p>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Enable/Disable Booking */}
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-bg-light border border-border-muted">
+                      <div>
+                        <p className="font-medium text-text">Enable Online Booking</p>
+                        <p className="text-sm text-text-muted">Allow customers to book through your booking page</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setBookingForm({
+                          ...bookingForm,
+                          booking_enabled: !bookingForm.booking_enabled
+                        })}
+                        className={`relative w-12 h-6 rounded-full transition-colors ${
+                          bookingForm.booking_enabled ? 'bg-primary' : 'bg-border-muted'
+                        }`}
+                      >
+                        <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                          bookingForm.booking_enabled ? 'translate-x-6' : 'translate-x-0'
+                        }`} />
+                      </button>
+                    </div>
+
+                    {/* Booking URL */}
+                    <div>
+                      <Label htmlFor="booking_slug">Booking URL</Label>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-text-muted text-sm">{typeof window !== 'undefined' ? window.location.origin : ''}/book/</span>
+                        <Input
+                          id="booking_slug"
+                          value={bookingForm.slug}
+                          onChange={(e) => setBookingForm({
+                            ...bookingForm,
+                            slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')
+                          })}
+                          placeholder="your-shop-name"
+                          className="flex-1 bg-bg-light border-border-muted text-text"
+                        />
+                      </div>
+                      <p className="text-xs text-text-muted mt-1">
+                        Only lowercase letters, numbers, and hyphens allowed
+                      </p>
+                    </div>
+
+                    {/* Preview Link */}
+                    {bookingForm.booking_enabled && bookingForm.slug && (
+                      <div className="p-4 rounded-lg bg-success/10 border border-success/30">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Link size={18} className="text-success" />
+                            <span className="text-sm font-medium text-success">Your booking page is live!</span>
+                          </div>
+                          <a
+                            href={`/book/${bookingForm.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-sm text-success hover:underline"
+                          >
+                            Open page <ExternalLink size={14} />
+                          </a>
+                        </div>
+                        <p className="text-xs text-text-muted mt-2">
+                          Share this link with your customers: {typeof window !== 'undefined' ? window.location.origin : ''}/book/{bookingForm.slug}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Info about booking features */}
+                    <div className="p-4 rounded-lg bg-info/10 border border-info/30">
+                      <h4 className="font-medium text-info mb-2">Booking Features</h4>
+                      <ul className="text-sm text-text-muted space-y-1">
+                        <li>• Customers can select service type, date, and time</li>
+                        <li>• Automatic SMS confirmation sent to customers</li>
+                        <li>• New customers are added to your customer database</li>
+                        <li>• Bookings create work orders automatically</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-border-muted">
+                    <Button onClick={handleSaveBooking} disabled={saving === 'booking'} className="bg-primary hover:bg-primary/90">
+                      {saving === 'booking' ? <Loader2 size={16} className="animate-spin mr-2" /> : <Save size={16} className="mr-2" />}
                       Save Changes
                     </Button>
                   </div>

@@ -9,13 +9,16 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import DashboardLayout from '@/components/DashboardLayout';
+import LandingPage from '@/components/LandingPage';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function DashboardPage() {
-  const { profile, shop, loading: authLoading } = useAuth();
+  const { user, profile, shop, loading: authLoading } = useAuth();
+
+  // All hooks must be called before any conditional returns (React rules of hooks)
   const [time, setTime] = useState(new Date());
   const [stats, setStats] = useState({
     totalCustomers: 0,
@@ -41,6 +44,7 @@ export default function DashboardPage() {
 
   const supabase = createClient();
 
+  // All useEffect hooks must be called before conditional returns (React rules of hooks)
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -89,11 +93,16 @@ export default function DashboardPage() {
       )
       .subscribe();
 
-    // ✅ PROPER CLEANUP - prevents memory leak
+    // Proper cleanup - prevents memory leak
     return () => {
       supabase.removeChannel(channel);
     };
   }, [profile?.shop_id]);
+
+  // Show landing page for unauthenticated users (after all hooks)
+  if (!authLoading && !user) {
+    return <LandingPage />;
+  }
 
   async function loadTasks() {
     if (!profile?.shop_id) return;
