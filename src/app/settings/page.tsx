@@ -71,7 +71,8 @@ export default function SettingsPage() {
   // Initialize data with timeout
   useEffect(() => {
     const timeout = setTimeout(() => {
-      if (pageLoading) {
+      // Only show timeout toast if still loading AND user is authenticated
+      if (pageLoading && user) {
         setPageLoading(false);
         toast({
           variant: "destructive",
@@ -468,7 +469,8 @@ export default function SettingsPage() {
   }
 
   // Loading state
-  if (pageLoading) {
+  // Only show timeout toast if still loading AND user is authenticated
+      if (pageLoading && user) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
