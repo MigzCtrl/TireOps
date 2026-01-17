@@ -7,7 +7,7 @@ import {
   Package, Plus, Search, Download, Trash2, Edit, Check, Loader2,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
   Minus, History, Upload, FileSpreadsheet, X, AlertCircle, CheckCircle,
-  Lock, Image, FileText, Sparkles, Pencil
+  Lock, Image, FileText, Sparkles, Pencil, RefreshCw
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -102,56 +102,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     if (!profile?.shop_id) return;
-
-    let isMounted = true;
-    let inventoryChannel: any = null;
-
-    const loadInventorySafe = async () => {
-      if (isMounted) {
-        loadInventory();
-      }
-    };
-
-    loadInventorySafe();
-
-    // UNIQUE channel name to prevent collisions with work-orders page
-    const channelName = `inventory-page-${profile.shop_id}`;
-
-    inventoryChannel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'inventory',
-          filter: `shop_id=eq.${profile.shop_id}`,
-        },
-        (payload) => {
-          if (!isMounted) return;
-
-          if (payload.eventType === 'UPDATE') {
-            setInventory(prev => prev.map(t =>
-              t.id === (payload.new as any).id
-                ? { ...t, ...(payload.new as any) }
-                : t
-            ));
-          } else if (payload.eventType === 'INSERT') {
-            setInventory(prev => [...prev, payload.new as any]);
-          } else if (payload.eventType === 'DELETE') {
-            setInventory(prev => prev.filter(t => t.id !== (payload.old as any).id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      isMounted = false;
-      // CRITICAL FIX: Ensure channel cleanup
-      if (inventoryChannel) {
-        supabase.removeChannel(inventoryChannel);
-      }
-    };
+    loadInventory();
   }, [profile?.shop_id]);
 
   async function loadInventory() {
@@ -599,6 +550,16 @@ export default function InventoryPage() {
                   Export
                 </>
               )}
+            </button>
+
+            {/* Refresh Button */}
+            <button
+              onClick={() => loadInventory()}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-light text-text hover:bg-highlight hover:text-text transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              Refresh
             </button>
 
             {/* Import Button */}

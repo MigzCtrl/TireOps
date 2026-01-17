@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Package, ClipboardList, TrendingUp, DollarSign,
   Clock, Cloud, Plus, Check, Trash2, Edit3, X,
-  Calendar, ChevronLeft, ChevronRight, AlertCircle, UserPlus, FileText
+  Calendar, ChevronLeft, ChevronRight, AlertCircle, UserPlus, FileText, RefreshCw
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -66,37 +66,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!profile?.shop_id) return;
-
     loadTasks();
-
-    // Subscribe to task changes with proper cleanup
-    const channel = supabase
-      .channel('tasks-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',  // Listen to all events (INSERT, UPDATE, DELETE)
-          schema: 'public',
-          table: 'tasks',
-          filter: `shop_id=eq.${profile.shop_id}`,
-        },
-        (payload) => {
-          // Optimistic update based on event type
-          if (payload.eventType === 'INSERT') {
-            setTasks(prev => [payload.new as any, ...prev]);
-          } else if (payload.eventType === 'DELETE') {
-            setTasks(prev => prev.filter(t => t.id !== (payload.old as any).id));
-          } else if (payload.eventType === 'UPDATE') {
-            setTasks(prev => prev.map(t => t.id === (payload.new as any).id ? payload.new as any : t));
-          }
-        }
-      )
-      .subscribe();
-
-    // Proper cleanup - prevents memory leak
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [profile?.shop_id]);
 
   // Show landing page for unauthenticated users (after all hooks)
@@ -406,6 +376,17 @@ export default function DashboardPage() {
 
           {/* Quick Action Buttons */}
           <div className="flex gap-2">
+            <button
+              onClick={() => {
+                loadStats();
+                loadAllOrders();
+                loadTasks();
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-highlight hover:text-text transition-colors"
+            >
+              <RefreshCw size={16} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
             <Link href="/work-orders">
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-highlight hover:text-text transition-colors cursor-pointer">
                 <FileText size={16} />

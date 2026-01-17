@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, RefreshCw } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -136,42 +136,7 @@ export default function WorkOrdersPage() {
 
   useEffect(() => {
     if (!profile?.shop_id) return;
-    let isMounted = true;
-    let inventoryChannel: any = null;
-
-    const loadDataSafe = async () => {
-      if (isMounted) await loadData();
-    };
-    loadDataSafe();
-
-    // Realtime subscription for inventory
-    const channelName = `work-orders-inventory-${profile.shop_id}`;
-    inventoryChannel = supabase
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'inventory',
-        filter: `shop_id=eq.${profile.shop_id}`,
-      }, (payload) => {
-        if (!isMounted) return;
-        if (payload.eventType === 'UPDATE') {
-          setTires(prev => prev.map(t =>
-            t.id === (payload.new as any).id
-              ? { ...t, quantity: (payload.new as any).quantity }
-              : t
-          ));
-        }
-      })
-      .subscribe();
-
-    return () => {
-      isMounted = false;
-      // CRITICAL FIX: Ensure channel cleanup
-      if (inventoryChannel) {
-        supabase.removeChannel(inventoryChannel);
-      }
-    };
+    loadData();
   }, [profile?.shop_id]);
 
   async function loadData() {
@@ -620,16 +585,26 @@ export default function WorkOrdersPage() {
             </p>
           </div>
 
-          <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
-            <DialogTrigger asChild>
-              <button
-                disabled={!canEdit}
-                className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
-              >
-                <Plus size={20} />
-                New Work Order
-              </button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <button
+              onClick={() => loadData()}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-bg-light text-text-muted hover:bg-highlight hover:text-text transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+
+            <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
+              <DialogTrigger asChild>
+                <button
+                  disabled={!canEdit}
+                  className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
+                >
+                  <Plus size={20} />
+                  New Work Order
+                </button>
+              </DialogTrigger>
             <WorkOrderForm
               open={formModal.isOpen}
               onOpenChange={(open) => open ? formModal.open(formModal.data) : formModal.close()}
