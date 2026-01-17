@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/client';
 import {
   Package, Plus, Search, Download, Trash2, Edit, Check, Loader2,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
-  Minus, History, Upload, FileSpreadsheet, X, AlertCircle, CheckCircle
+  Minus, History, Upload, FileSpreadsheet, X, AlertCircle, CheckCircle,
+  Lock, Image, FileText, Sparkles, Pencil
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePagination, useSort, useFilters, useModal } from '@/hooks';
+import { useFeatureGate } from '@/hooks/useFeatureGate';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import type { Tire } from '@/types/database';
 
 // Get supabase client ONCE outside component to prevent re-creation on renders
@@ -27,6 +30,8 @@ type SortField = 'brand' | 'model' | 'size' | 'quantity' | 'price';
 export default function InventoryPage() {
   const { profile, isOwner, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { hasFeature, currentTier } = useFeatureGate();
+  const canUseImport = hasFeature('ai_import');
 
   // Data state
   const [inventory, setInventory] = useState<Tire[]>([]);
@@ -42,8 +47,12 @@ export default function InventoryPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [importPreview, setImportPreview] = useState<{ brand: string; model: string; size: string; quantity: number; price: number }[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importMethod, setImportMethod] = useState<'csv' | 'excel' | 'ai' | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -398,41 +407,76 @@ export default function InventoryPage() {
     setImportFile(file);
     setImportError(null);
     setImportPreview([]);
+    setImportMethod(null);
+    setEditingIndex(null);
+    setAnalyzing(true);
+
+    // Timeout controller to prevent infinite loading
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
     try {
-      const text = await file.text();
-      const parsed = parseInventoryCSV(text);
-      if (parsed.length > 0) {
-        setImportPreview(parsed.slice(0, 5));
+      // Use AI-powered import API for all file types
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'inventory');
+
+      const response = await fetch('/api/import/analyze', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to analyze file');
       }
-    } catch (err) {
-      setImportError('Failed to read file');
+
+      if (result.data && result.data.length > 0) {
+        setImportPreview(result.data);
+        setImportMethod(result.method);
+      } else {
+        setImportError('No inventory data found in file. Try a different file or format.');
+      }
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        setImportError('Analysis timed out. Try a smaller file or CSV format.');
+      } else {
+        setImportError(err.message || 'Failed to analyze file');
+      }
+    } finally {
+      setAnalyzing(false);
     }
   }
 
   async function handleInventoryImport() {
-    if (!importFile || !profile?.shop_id) return;
+    if (!profile?.shop_id || importPreview.length === 0) return;
 
     setImporting(true);
     setImportError(null);
 
     try {
-      const text = await importFile.text();
-      const items = parseInventoryCSV(text);
+      // Filter out empty rows
+      const validItems = importPreview.filter(item =>
+        item.brand?.trim() && item.size?.trim()
+      );
 
-      if (items.length === 0) {
-        setImportError('No valid inventory items found in file');
+      if (validItems.length === 0) {
+        setImportError('No valid inventory items found');
         setImporting(false);
         return;
       }
 
-      const inventoryData = items.map(item => ({
+      const inventoryData = validItems.map(item => ({
         shop_id: profile.shop_id,
-        brand: item.brand,
-        model: item.model,
-        size: item.size,
-        quantity: item.quantity,
-        price: item.price,
+        brand: item.brand.trim(),
+        model: item.model?.trim() || '',
+        size: item.size.trim(),
+        quantity: item.quantity || 0,
+        price: item.price || 0,
       }));
 
       const { error } = await supabase
@@ -443,12 +487,14 @@ export default function InventoryPage() {
 
       toast({
         title: 'Import Successful!',
-        description: `${items.length} inventory items imported`,
+        description: `${validItems.length} inventory items imported`,
       });
 
       setImportModalOpen(false);
       setImportFile(null);
       setImportPreview([]);
+      setImportMethod(null);
+      setEditingIndex(null);
       loadInventory();
     } catch (err: any) {
       console.error('Import error:', err);
@@ -456,6 +502,18 @@ export default function InventoryPage() {
     } finally {
       setImporting(false);
     }
+  }
+
+  // Update an import row
+  function updateImportRow(index: number, field: 'brand' | 'model' | 'size' | 'quantity' | 'price', value: string | number) {
+    setImportPreview(prev => prev.map((row, i) =>
+      i === index ? { ...row, [field]: value } : row
+    ));
+  }
+
+  // Delete an import row
+  function deleteImportRow(index: number) {
+    setImportPreview(prev => prev.filter((_, i) => i !== index));
   }
 
   function downloadInventoryTemplate() {
@@ -545,12 +603,16 @@ export default function InventoryPage() {
 
             {/* Import Button */}
             <button
-              onClick={() => setImportModalOpen(true)}
+              onClick={() => canUseImport ? setImportModalOpen(true) : setShowUpgradePrompt(true)}
               disabled={!isOwner}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-light text-text hover:bg-highlight hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                canUseImport
+                  ? 'bg-bg-light text-text hover:bg-highlight hover:text-text'
+                  : 'bg-bg-light text-text-muted'
+              }`}
             >
-              <Upload size={16} />
-              Import
+              {canUseImport ? <Upload size={16} /> : <Lock size={16} />}
+              {canUseImport ? 'Import' : 'Import (Pro)'}
             </button>
 
             <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
@@ -917,30 +979,46 @@ export default function InventoryPage() {
 
         {/* Import Modal */}
         <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="text-primary" size={20} />
-                Import Inventory
+                <Sparkles className="text-primary" size={20} />
+                AI-Powered Import
               </DialogTitle>
               <DialogDescription>
-                Upload a CSV file to import multiple inventory items at once.
+                Upload photos, PDFs, CSV, Excel, or text files. Our AI will extract inventory data automatically.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 pt-2">
+              {/* Supported formats info */}
+              <div className="flex items-center gap-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <Image size={14} className="text-primary" /> Photos
+                </div>
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <FileText size={14} className="text-primary" /> PDF
+                </div>
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <FileSpreadsheet size={14} className="text-primary" /> CSV/Excel
+                </div>
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <FileText size={14} className="text-primary" /> Text
+                </div>
+              </div>
+
               {/* Template download */}
-              <div className="p-4 bg-bg-light rounded-lg border border-border-muted">
+              <div className="p-3 bg-bg-light rounded-lg border border-border-muted">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-text">Need a template?</p>
-                    <p className="text-xs text-text-muted">Download our CSV template with the correct format</p>
+                    <p className="text-xs text-text-muted">Download our CSV template</p>
                   </div>
                   <button
                     onClick={downloadInventoryTemplate}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg text-text-muted hover:bg-primary hover:text-white transition-colors text-sm"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bg text-text-muted hover:bg-primary hover:text-white transition-colors text-sm"
                   >
-                    <Download size={16} />
+                    <Download size={14} />
                     Template
                   </button>
                 </div>
@@ -950,20 +1028,27 @@ export default function InventoryPage() {
               <div className="relative">
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.xlsx,.xls,.pdf,.txt,.png,.jpg,.jpeg,.webp"
                   onChange={handleInventoryFileSelect}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
-                <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
                   importFile ? 'border-success bg-success/5' : 'border-border-muted hover:border-primary'
                 }`}>
-                  {importFile ? (
+                  {analyzing ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="animate-spin text-primary" size={32} />
+                      <p className="text-sm text-text">Analyzing with AI...</p>
+                      <p className="text-xs text-text-muted">This may take a moment for images and PDFs</p>
+                    </div>
+                  ) : importFile ? (
                     <div className="flex items-center justify-center gap-3">
                       <CheckCircle className="text-success" size={24} />
                       <div className="text-left">
                         <p className="font-medium text-text">{importFile.name}</p>
                         <p className="text-xs text-text-muted">
-                          {importPreview.length > 0 ? `${importPreview.length}+ items found` : 'Processing...'}
+                          {importPreview.length > 0 ? `${importPreview.length} items found` : 'Processing...'}
+                          {importMethod && <span className="ml-1 text-primary">({importMethod})</span>}
                         </p>
                       </div>
                       <button
@@ -972,6 +1057,7 @@ export default function InventoryPage() {
                           setImportFile(null);
                           setImportPreview([]);
                           setImportError(null);
+                          setImportMethod(null);
                         }}
                         className="p-1 rounded hover:bg-bg-light"
                       >
@@ -981,30 +1067,76 @@ export default function InventoryPage() {
                   ) : (
                     <>
                       <Upload className="mx-auto mb-3 text-text-muted" size={32} />
-                      <p className="text-sm text-text">Drop your CSV file here or click to browse</p>
-                      <p className="text-xs text-text-muted mt-1">Supports .csv files</p>
+                      <p className="text-sm text-text">Drop your file here or click to browse</p>
+                      <p className="text-xs text-text-muted mt-1">Photos, PDFs, CSV, Excel, or text files</p>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Preview */}
+              {/* Editable Preview */}
               {importPreview.length > 0 && (
                 <div className="border border-border-muted rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 bg-bg-light border-b border-border-muted">
-                    <p className="text-xs font-medium text-text-muted">Preview (first 5 rows)</p>
+                  <div className="px-4 py-2 bg-bg-light border-b border-border-muted flex items-center justify-between">
+                    <p className="text-xs font-medium text-text-muted">Review & Edit ({importPreview.length} items)</p>
                   </div>
-                  <div className="divide-y divide-border-muted max-h-40 overflow-y-auto">
+                  <div className="divide-y divide-border-muted max-h-60 overflow-y-auto">
                     {importPreview.map((row, i) => (
-                      <div key={i} className="px-4 py-2 text-sm flex items-center justify-between">
-                        <div>
-                          <span className="font-medium text-text">{row.brand} {row.model}</span>
-                          <span className="text-text-muted ml-2">{row.size}</span>
-                        </div>
-                        <div className="text-right text-text-muted text-xs">
-                          <span>Qty: {row.quantity}</span>
-                          <span className="ml-2">${row.price}</span>
-                        </div>
+                      <div key={i} className="px-3 py-2 text-sm flex items-center gap-2 hover:bg-bg-light/50">
+                        {editingIndex === i ? (
+                          <>
+                            <input
+                              value={row.brand}
+                              onChange={(e) => updateImportRow(i, 'brand', e.target.value)}
+                              placeholder="Brand"
+                              className="flex-1 px-2 py-1 text-xs rounded border border-border-muted bg-bg text-text"
+                            />
+                            <input
+                              value={row.model}
+                              onChange={(e) => updateImportRow(i, 'model', e.target.value)}
+                              placeholder="Model"
+                              className="flex-1 px-2 py-1 text-xs rounded border border-border-muted bg-bg text-text"
+                            />
+                            <input
+                              value={row.size}
+                              onChange={(e) => updateImportRow(i, 'size', e.target.value)}
+                              placeholder="Size"
+                              className="w-24 px-2 py-1 text-xs rounded border border-border-muted bg-bg text-text"
+                            />
+                            <input
+                              type="number"
+                              value={row.quantity}
+                              onChange={(e) => updateImportRow(i, 'quantity', parseInt(e.target.value) || 0)}
+                              placeholder="Qty"
+                              className="w-16 px-2 py-1 text-xs rounded border border-border-muted bg-bg text-text"
+                            />
+                            <input
+                              type="number"
+                              value={row.price}
+                              onChange={(e) => updateImportRow(i, 'price', parseFloat(e.target.value) || 0)}
+                              placeholder="Price"
+                              className="w-20 px-2 py-1 text-xs rounded border border-border-muted bg-bg text-text"
+                            />
+                            <button onClick={() => setEditingIndex(null)} className="p-1 text-success hover:bg-success/10 rounded">
+                              <Check size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-text">{row.brand} {row.model}</span>
+                              <span className="text-text-muted ml-2">{row.size}</span>
+                            </div>
+                            <span className="text-text-muted text-xs">Qty: {row.quantity}</span>
+                            <span className="text-success text-xs font-medium">${row.price}</span>
+                            <button onClick={() => setEditingIndex(i)} className="p-1 text-text-muted hover:bg-bg-light rounded">
+                              <Pencil size={12} />
+                            </button>
+                            <button onClick={() => deleteImportRow(i)} className="p-1 text-text-muted hover:bg-danger/10 hover:text-danger rounded">
+                              <Trash2 size={12} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1027,6 +1159,8 @@ export default function InventoryPage() {
                     setImportFile(null);
                     setImportPreview([]);
                     setImportError(null);
+                    setImportMethod(null);
+                    setEditingIndex(null);
                   }}
                   className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-bg transition-colors"
                 >
@@ -1034,7 +1168,7 @@ export default function InventoryPage() {
                 </button>
                 <button
                   onClick={handleInventoryImport}
-                  disabled={!importFile || importing || importPreview.length === 0}
+                  disabled={importing || importPreview.length === 0 || analyzing}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {importing ? (
@@ -1045,7 +1179,7 @@ export default function InventoryPage() {
                   ) : (
                     <>
                       <Upload size={18} />
-                      Import {importPreview.length > 0 ? `${importPreview.length}+ Items` : ''}
+                      Import {importPreview.length} Items
                     </>
                   )}
                 </button>
@@ -1053,6 +1187,14 @@ export default function InventoryPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Upgrade Prompt */}
+        <UpgradePrompt
+          isOpen={showUpgradePrompt}
+          onClose={() => setShowUpgradePrompt(false)}
+          feature="ai_import"
+          currentTier={currentTier}
+        />
 
         {/* Delete Confirmation Dialog */}
         {deleteModal.data && (

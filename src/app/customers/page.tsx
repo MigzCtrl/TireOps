@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Users, Plus, ChevronLeft, ChevronRight, Upload, FileSpreadsheet, Download, X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Users, Plus, ChevronLeft, ChevronRight, Upload, FileSpreadsheet, Download, X, AlertCircle, CheckCircle, Loader2, Lock, Image, FileText, Sparkles, Pencil, Trash2, Check } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSort, useFilters, useModal } from '@/hooks';
+import { useFeatureGate } from '@/hooks/useFeatureGate';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { customerSchema, sanitizeInput } from '@/lib/validations/schemas';
 import type { Customer } from '@/types/database';
 import { CustomerList } from './_components/CustomerList';
@@ -31,6 +33,8 @@ type SortField = 'name' | 'email' | 'phone' | 'created_at' | 'order_count';
 export default function CustomersPage() {
   const { profile, canEdit, canDelete, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { hasFeature, currentTier } = useFeatureGate();
+  const canUseImport = hasFeature('ai_import');
 
   // Data state
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -50,8 +54,12 @@ export default function CustomersPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [importPreview, setImportPreview] = useState<{ name: string; phone: string; email: string }[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importMethod, setImportMethod] = useState<'csv' | 'excel' | 'ai' | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -370,40 +378,80 @@ export default function CustomersPage() {
     setImportFile(file);
     setImportError(null);
     setImportPreview([]);
+    setImportMethod(null);
+    setEditingIndex(null);
+    setAnalyzing(true);
+
+    // Timeout controller to prevent infinite loading
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
     try {
-      const text = await file.text();
-      const parsed = parseCSV(text);
-      if (parsed.length > 0) {
-        setImportPreview(parsed.slice(0, 5)); // Preview first 5
+      // Use AI-powered import API for all file types
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'customers');
+
+      const response = await fetch('/api/import/analyze', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to analyze file');
       }
-    } catch (err) {
-      setImportError('Failed to read file');
+
+      if (result.data && result.data.length > 0) {
+        // Filter out placeholder names
+        const filteredData = result.data.filter((c: { name: string }) => {
+          const lowerName = c.name.toLowerCase().trim();
+          return lowerName !== 'customer name' && lowerName !== 'name' && lowerName.length >= 2;
+        });
+        setImportPreview(filteredData);
+        setImportMethod(result.method);
+      } else {
+        setImportError('No customer data found in file. Try a different file or format.');
+      }
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        setImportError('Analysis timed out. Try a smaller file or CSV format.');
+      } else {
+        setImportError(err.message || 'Failed to analyze file');
+      }
+    } finally {
+      setAnalyzing(false);
     }
   }
 
   async function handleImport() {
-    if (!importFile || !profile?.shop_id) return;
+    if (!profile?.shop_id || importPreview.length === 0) return;
 
     setImporting(true);
     setImportError(null);
 
     try {
-      const text = await importFile.text();
-      const customers = parseCSV(text);
+      // Filter out empty rows
+      const validCustomers = importPreview.filter(c =>
+        c.name?.trim() && c.name.toLowerCase() !== 'customer name'
+      );
 
-      if (customers.length === 0) {
-        setImportError('No valid customers found in file');
+      if (validCustomers.length === 0) {
+        setImportError('No valid customers found');
         setImporting(false);
         return;
       }
 
       // Batch insert customers
-      const customerData = customers.map(c => ({
+      const customerData = validCustomers.map(c => ({
         shop_id: profile.shop_id,
-        name: c.name,
-        phone: c.phone || null,
-        email: c.email || null,
+        name: c.name.trim(),
+        phone: c.phone?.trim() || null,
+        email: c.email?.trim() || null,
       }));
 
       const { error } = await supabase
@@ -414,12 +462,14 @@ export default function CustomersPage() {
 
       toast({
         title: 'Import Successful!',
-        description: `${customers.length} customers imported`,
+        description: `${validCustomers.length} customers imported`,
       });
 
       setImportModalOpen(false);
       setImportFile(null);
       setImportPreview([]);
+      setImportMethod(null);
+      setEditingIndex(null);
       loadData();
     } catch (err: any) {
       console.error('Import error:', err);
@@ -427,6 +477,18 @@ export default function CustomersPage() {
     } finally {
       setImporting(false);
     }
+  }
+
+  // Update an import row
+  function updateImportRow(index: number, field: 'name' | 'phone' | 'email', value: string) {
+    setImportPreview(prev => prev.map((row, i) =>
+      i === index ? { ...row, [field]: value } : row
+    ));
+  }
+
+  // Delete an import row
+  function deleteImportRow(index: number) {
+    setImportPreview(prev => prev.filter((_, i) => i !== index));
   }
 
   function downloadTemplate() {
@@ -498,12 +560,16 @@ export default function CustomersPage() {
           <div className="flex gap-2">
             {/* Import Button */}
             <button
-              onClick={() => setImportModalOpen(true)}
+              onClick={() => canUseImport ? setImportModalOpen(true) : setShowUpgradePrompt(true)}
               disabled={!canEdit}
-              className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-bg-light text-text-muted hover:bg-highlight hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                canUseImport
+                  ? 'bg-bg-light text-text-muted hover:bg-highlight hover:text-text'
+                  : 'bg-bg-light text-text-muted'
+              }`}
             >
-              <Upload size={18} />
-              Import
+              {canUseImport ? <Upload size={18} /> : <Lock size={18} />}
+              {canUseImport ? 'Import' : 'Import (Pro)'}
             </button>
 
             <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
@@ -652,30 +718,46 @@ export default function CustomersPage() {
 
         {/* Import Modal */}
         <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="text-primary" size={20} />
-                Import Customers
+                <Sparkles className="text-primary" size={20} />
+                AI-Powered Import
               </DialogTitle>
               <DialogDescription>
-                Upload a CSV file to import multiple customers at once.
+                Upload photos, PDFs, CSV, Excel, or text files. Our AI will extract customer data automatically.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 pt-2">
+              {/* Supported formats info */}
+              <div className="flex items-center gap-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <Image size={14} className="text-primary" /> Photos
+                </div>
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <FileText size={14} className="text-primary" /> PDF
+                </div>
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <FileSpreadsheet size={14} className="text-primary" /> CSV/Excel
+                </div>
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <FileText size={14} className="text-primary" /> Text
+                </div>
+              </div>
+
               {/* Template download */}
-              <div className="p-4 bg-bg-light rounded-lg border border-border-muted">
+              <div className="p-3 bg-bg-light rounded-lg border border-border-muted">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-text">Need a template?</p>
-                    <p className="text-xs text-text-muted">Download our CSV template with the correct format</p>
+                    <p className="text-xs text-text-muted">Download our CSV template</p>
                   </div>
                   <button
                     onClick={downloadTemplate}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg text-text-muted hover:bg-primary hover:text-white transition-colors text-sm"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bg text-text-muted hover:bg-primary hover:text-white transition-colors text-sm"
                   >
-                    <Download size={16} />
+                    <Download size={14} />
                     Template
                   </button>
                 </div>
@@ -685,20 +767,27 @@ export default function CustomersPage() {
               <div className="relative">
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.xlsx,.xls,.pdf,.txt,.png,.jpg,.jpeg,.webp"
                   onChange={handleFileSelect}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
-                <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
                   importFile ? 'border-success bg-success/5' : 'border-border-muted hover:border-primary'
                 }`}>
-                  {importFile ? (
+                  {analyzing ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="animate-spin text-primary" size={32} />
+                      <p className="text-sm text-text">Analyzing with AI...</p>
+                      <p className="text-xs text-text-muted">This may take a moment for images and PDFs</p>
+                    </div>
+                  ) : importFile ? (
                     <div className="flex items-center justify-center gap-3">
                       <CheckCircle className="text-success" size={24} />
                       <div className="text-left">
                         <p className="font-medium text-text">{importFile.name}</p>
                         <p className="text-xs text-text-muted">
-                          {importPreview.length > 0 ? `${importPreview.length}+ customers found` : 'Processing...'}
+                          {importPreview.length > 0 ? `${importPreview.length} customers found` : 'Processing...'}
+                          {importMethod && <span className="ml-1 text-primary">({importMethod})</span>}
                         </p>
                       </div>
                       <button
@@ -707,6 +796,7 @@ export default function CustomersPage() {
                           setImportFile(null);
                           setImportPreview([]);
                           setImportError(null);
+                          setImportMethod(null);
                         }}
                         className="p-1 rounded hover:bg-bg-light"
                       >
@@ -716,25 +806,59 @@ export default function CustomersPage() {
                   ) : (
                     <>
                       <Upload className="mx-auto mb-3 text-text-muted" size={32} />
-                      <p className="text-sm text-text">Drop your CSV file here or click to browse</p>
-                      <p className="text-xs text-text-muted mt-1">Supports .csv files</p>
+                      <p className="text-sm text-text">Drop your file here or click to browse</p>
+                      <p className="text-xs text-text-muted mt-1">Photos, PDFs, CSV, Excel, or text files</p>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Preview */}
+              {/* Editable Preview */}
               {importPreview.length > 0 && (
                 <div className="border border-border-muted rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 bg-bg-light border-b border-border-muted">
-                    <p className="text-xs font-medium text-text-muted">Preview (first 5 rows)</p>
+                  <div className="px-4 py-2 bg-bg-light border-b border-border-muted flex items-center justify-between">
+                    <p className="text-xs font-medium text-text-muted">Review & Edit ({importPreview.length} customers)</p>
                   </div>
-                  <div className="divide-y divide-border-muted max-h-40 overflow-y-auto">
+                  <div className="divide-y divide-border-muted max-h-60 overflow-y-auto">
                     {importPreview.map((row, i) => (
-                      <div key={i} className="px-4 py-2 text-sm">
-                        <span className="font-medium text-text">{row.name}</span>
-                        {row.phone && <span className="text-text-muted ml-2">{row.phone}</span>}
-                        {row.email && <span className="text-text-muted ml-2">{row.email}</span>}
+                      <div key={i} className="px-3 py-2 text-sm flex items-center gap-2 hover:bg-bg-light/50">
+                        {editingIndex === i ? (
+                          <>
+                            <input
+                              value={row.name}
+                              onChange={(e) => updateImportRow(i, 'name', e.target.value)}
+                              placeholder="Name"
+                              className="flex-1 px-2 py-1 text-xs rounded border border-border-muted bg-bg text-text"
+                            />
+                            <input
+                              value={row.phone}
+                              onChange={(e) => updateImportRow(i, 'phone', e.target.value)}
+                              placeholder="Phone"
+                              className="w-32 px-2 py-1 text-xs rounded border border-border-muted bg-bg text-text"
+                            />
+                            <input
+                              value={row.email}
+                              onChange={(e) => updateImportRow(i, 'email', e.target.value)}
+                              placeholder="Email"
+                              className="flex-1 px-2 py-1 text-xs rounded border border-border-muted bg-bg text-text"
+                            />
+                            <button onClick={() => setEditingIndex(null)} className="p-1 text-success hover:bg-success/10 rounded">
+                              <Check size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium text-text flex-1">{row.name}</span>
+                            <span className="text-text-muted text-xs">{row.phone}</span>
+                            <span className="text-text-muted text-xs">{row.email}</span>
+                            <button onClick={() => setEditingIndex(i)} className="p-1 text-text-muted hover:bg-bg-light rounded">
+                              <Pencil size={12} />
+                            </button>
+                            <button onClick={() => deleteImportRow(i)} className="p-1 text-text-muted hover:bg-danger/10 hover:text-danger rounded">
+                              <Trash2 size={12} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -757,6 +881,8 @@ export default function CustomersPage() {
                     setImportFile(null);
                     setImportPreview([]);
                     setImportError(null);
+                    setImportMethod(null);
+                    setEditingIndex(null);
                   }}
                   className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-bg transition-colors"
                 >
@@ -764,7 +890,7 @@ export default function CustomersPage() {
                 </button>
                 <button
                   onClick={handleImport}
-                  disabled={!importFile || importing || importPreview.length === 0}
+                  disabled={importing || importPreview.length === 0 || analyzing}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {importing ? (
@@ -775,7 +901,7 @@ export default function CustomersPage() {
                   ) : (
                     <>
                       <Upload size={18} />
-                      Import {importPreview.length > 0 ? `${importPreview.length}+ Customers` : ''}
+                      Import {importPreview.length} Customers
                     </>
                   )}
                 </button>
@@ -783,6 +909,14 @@ export default function CustomersPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Upgrade Prompt */}
+        <UpgradePrompt
+          isOpen={showUpgradePrompt}
+          onClose={() => setShowUpgradePrompt(false)}
+          feature="ai_import"
+          currentTier={currentTier}
+        />
 
         {/* Delete Confirmation Dialog */}
         <DeleteConfirmDialog

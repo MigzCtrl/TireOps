@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, User, Users, ClipboardList, Check, ChevronRight, ChevronLeft,
   ArrowRight, Loader2, Phone, Mail, MapPin, Wrench, Calendar, Upload, RefreshCw,
-  Sparkles, Image, FileText, Pencil, Trash2, Plus, Clock, Package, Search, Info,
+  Sparkles, Image, FileText, Pencil, Trash2, Plus, Minus, Clock, Package, Search, Info,
   DollarSign, Settings2, Car, Hash
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -1418,7 +1418,7 @@ export default function OnboardingPage() {
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="shopName" className="text-sm font-medium text-text">Shop Name <span className="text-danger">*</span></Label>
-                      <Input id="shopName" value={formData.shopName} onChange={(e) => updateFormData('shopName', e.target.value)} placeholder="e.g. Premier Tire & Auto" className="mt-1.5 h-10" />
+                      <Input id="shopName" value={formData.shopName} onChange={(e) => updateFormData('shopName', e.target.value)} placeholder="e.g. Premier Tire & Auto" className="mt-1.5 h-10" autoComplete="off" data-lpignore="true" data-form-type="other" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -1521,15 +1521,38 @@ export default function OnboardingPage() {
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-1">
-                                        <span className="text-text-muted text-sm">$</span>
-                                        <input
-                                          type="number"
-                                          value={service.price}
-                                          onChange={(e) => handleServicePriceUpdate(service.id, parseFloat(e.target.value) || 0)}
-                                          className="w-16 h-8 px-2 text-right text-sm font-medium rounded border border-border-muted bg-bg-light text-text focus:outline-none focus:ring-1 focus:ring-primary"
-                                          min="0"
-                                          step="0.01"
-                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleServicePriceUpdate(service.id, Math.max(0, (service.price || 0) - 5))}
+                                          className="w-6 h-6 rounded flex items-center justify-center bg-bg-light border border-border-muted text-text-muted hover:bg-danger/20 hover:text-danger hover:border-danger/30 transition-colors"
+                                        >
+                                          <Minus size={12} />
+                                        </button>
+                                        <div className="relative">
+                                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-sm">$</span>
+                                          <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={service.price.toFixed(2)}
+                                            onChange={(e) => {
+                                              const val = e.target.value.replace(/[^0-9.]/g, '');
+                                              const num = parseFloat(val);
+                                              if (!isNaN(num)) handleServicePriceUpdate(service.id, num);
+                                            }}
+                                            onBlur={(e) => {
+                                              const num = parseFloat(e.target.value) || 0;
+                                              handleServicePriceUpdate(service.id, Math.max(0, num));
+                                            }}
+                                            className="w-20 h-8 pl-5 pr-2 text-right text-sm font-medium rounded border border-border-muted bg-bg-light text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleServicePriceUpdate(service.id, (service.price || 0) + 5)}
+                                          className="w-6 h-6 rounded flex items-center justify-center bg-bg-light border border-border-muted text-text-muted hover:bg-success/20 hover:text-success hover:border-success/30 transition-colors"
+                                        >
+                                          <Plus size={12} />
+                                        </button>
                                       </div>
                                     </div>
                                   ))}

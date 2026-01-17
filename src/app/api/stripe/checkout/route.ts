@@ -95,10 +95,22 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ url: session.url });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Checkout error:', error);
+
+    // Provide helpful error message for missing Stripe configuration
+    if (error?.message?.includes('STRIPE_SECRET_KEY')) {
+      return NextResponse.json(
+        {
+          error: 'Stripe is not configured. Please add STRIPE_SECRET_KEY to your Vercel environment variables.',
+          setup_url: 'https://dashboard.stripe.com/apikeys',
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Failed to create checkout session' },
+      { error: 'Failed to create checkout session. Please try again later.' },
       { status: 500 }
     );
   }

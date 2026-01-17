@@ -6,7 +6,11 @@ let stripeInstance: Stripe | null = null;
 function getStripe(): Stripe {
   if (!stripeInstance) {
     if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('Missing STRIPE_SECRET_KEY environment variable');
+      throw new Error(
+        'Missing STRIPE_SECRET_KEY environment variable. ' +
+        'Please add it in your Vercel dashboard: Project Settings > Environment Variables. ' +
+        'Get your key from https://dashboard.stripe.com/apikeys'
+      );
     }
     stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
       apiVersion: '2025-12-15.clover',
