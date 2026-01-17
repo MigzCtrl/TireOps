@@ -175,6 +175,70 @@ export default function OnboardingPage() {
     }
   }, [authLoading, user, router]);
 
+  // Check for pending subscription and link it automatically
+  useEffect(() => {
+    async function linkPendingSubscription() {
+      if (!shop?.id || authLoading) return;
+
+      // Check localStorage for pending checkout session
+      const pendingSession = typeof window !== 'undefined'
+        ? localStorage.getItem('pendingCheckoutSession')
+        : null;
+      const pendingTier = typeof window !== 'undefined'
+        ? localStorage.getItem('pendingTier')
+        : null;
+
+      if (!pendingSession) return;
+
+      // Skip if already linked (subscription_tier is pro or enterprise)
+      if (shop.subscription_tier === 'pro' || shop.subscription_tier === 'enterprise') {
+        // Clear the pending session
+        localStorage.removeItem('pendingCheckoutSession');
+        localStorage.removeItem('pendingTier');
+        localStorage.removeItem('pendingBillingCycle');
+        return;
+      }
+
+      console.log('[onboarding] Found pending subscription, linking...', { pendingSession, pendingTier });
+
+      try {
+        const response = await fetch('/api/stripe/link-subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            checkoutSessionId: pendingSession,
+            shopId: shop.id,
+            tier: pendingTier || 'pro',
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          console.log('[onboarding] Subscription linked successfully:', data.tier);
+          toast({
+            title: 'Subscription Activated!',
+            description: `Your ${data.tier === 'enterprise' ? 'Enterprise' : 'Professional'} plan is now active.`,
+          });
+
+          // Clear localStorage
+          localStorage.removeItem('pendingCheckoutSession');
+          localStorage.removeItem('pendingTier');
+          localStorage.removeItem('pendingBillingCycle');
+
+          // Refresh profile to get updated subscription data
+          await refreshProfile();
+        } else {
+          console.error('[onboarding] Failed to link subscription:', data.error);
+        }
+      } catch (error) {
+        console.error('[onboarding] Error linking subscription:', error);
+      }
+    }
+
+    linkPendingSubscription();
+  }, [shop?.id, shop?.subscription_tier, authLoading, toast, refreshProfile]);
+
   // Load inventory when customer is created and we're on step 3 (Work Order)
   useEffect(() => {
     async function loadInventory() {
