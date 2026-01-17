@@ -11,6 +11,15 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 const PLANS = {
+  starter: {
+    name: 'Starter',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    description: 'Perfect for getting started',
+    features: ['50 customers', '1 team member', 'Manual data entry', 'Basic reports'],
+    popular: false,
+    isFree: true,
+  },
   pro: {
     name: 'Professional',
     monthlyPrice: 29,
@@ -18,6 +27,7 @@ const PLANS = {
     description: 'For growing tire shops',
     features: ['2,000 customers', '5 team members', 'AI-powered import', 'SMS notifications'],
     popular: true,
+    isFree: false,
   },
   enterprise: {
     name: 'Enterprise',
@@ -26,6 +36,7 @@ const PLANS = {
     description: 'For multi-location businesses',
     features: ['Unlimited everything', 'Multi-shop', 'QuickBooks', 'AI Assistant'],
     popular: false,
+    isFree: false,
   },
 };
 
@@ -273,6 +284,7 @@ function PaymentForm({
 
 export default function CheckoutPage() {
   const params = useParams();
+  const router = useRouter();
   const initialTier = params.tier as string;
   const [selectedTier, setSelectedTier] = useState<PlanKey>(
     PLANS[initialTier as PlanKey] ? (initialTier as PlanKey) : 'pro'
@@ -301,6 +313,12 @@ export default function CheckoutPage() {
     }
     if (!validateEmail(email)) {
       setEmailError('Please enter a valid email address');
+      return;
+    }
+
+    // Handle free tier - redirect to register
+    if (selectedPlan.isFree) {
+      router.push(`/register?tier=starter&email=${encodeURIComponent(email)}`);
       return;
     }
 
@@ -465,16 +483,22 @@ export default function CheckoutPage() {
 
                       {/* Price */}
                       <div className="mb-5">
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-bold text-white">${planPrice}</span>
-                          <span className="text-slate-400 text-sm">
-                            /{billingCycle === 'yearly' ? 'year' : 'month'}
-                          </span>
-                        </div>
-                        {billingCycle === 'yearly' && (
-                          <p className="text-xs text-green-400 mt-1 font-medium">
-                            Just ${planMonthly}/mo — billed annually
-                          </p>
+                        {plan.isFree ? (
+                          <span className="text-3xl font-bold text-white">Free</span>
+                        ) : (
+                          <>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-3xl font-bold text-white">${planPrice}</span>
+                              <span className="text-slate-400 text-sm">
+                                /{billingCycle === 'yearly' ? 'year' : 'month'}
+                              </span>
+                            </div>
+                            {billingCycle === 'yearly' && (
+                              <p className="text-xs text-green-400 mt-1 font-medium">
+                                Just ${planMonthly}/mo — billed annually
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
 
@@ -540,6 +564,8 @@ export default function CheckoutPage() {
                       <Loader2 size={20} className="animate-spin" />
                       Loading...
                     </>
+                  ) : selectedPlan.isFree ? (
+                    'Get Started Free'
                   ) : (
                     'Continue to checkout'
                   )}
