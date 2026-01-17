@@ -912,10 +912,9 @@ export default function CustomersPage() {
 
         {/* Upgrade Prompt */}
         <UpgradePrompt
-          isOpen={showUpgradePrompt}
-          onClose={() => setShowUpgradePrompt(false)}
+          open={showUpgradePrompt}
+          onOpenChange={setShowUpgradePrompt}
           feature="ai_import"
-          currentTier={currentTier}
         />
 
         {/* Delete Confirmation Dialog */}

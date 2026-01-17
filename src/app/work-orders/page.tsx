@@ -626,6 +626,7 @@ export default function WorkOrdersPage() {
               onInventoryUpdate={handleInventoryUpdate}
             />
           </Dialog>
+          </div>
         </div>
 
         {/* Stats Cards */}
