@@ -151,3 +151,67 @@ CREATE INDEX IF NOT EXISTS idx_shops_slug ON shops(slug);
 ALTER TABLE shops ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255);
   `.trim();
 }
+
+/**
+ * Get migration SQL for shop services table
+ */
+export function getServicesMigrationSQL(): string {
+  return `
+-- Run this in Supabase SQL Editor to add services support
+
+-- Create service categories enum
+DO $$ BEGIN
+  CREATE TYPE service_category AS ENUM ('installation', 'maintenance', 'repair', 'tpms', 'fees', 'protection');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+-- Create price type enum
+DO $$ BEGIN
+  CREATE TYPE service_price_type AS ENUM ('per_tire', 'flat', 'per_unit');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+-- Create shop_services table
+CREATE TABLE IF NOT EXISTS shop_services (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  category service_category NOT NULL DEFAULT 'installation',
+  price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  price_type service_price_type NOT NULL DEFAULT 'per_tire',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  is_taxable BOOLEAN NOT NULL DEFAULT true,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_shop_services_shop_id ON shop_services(shop_id);
+CREATE INDEX IF NOT EXISTS idx_shop_services_category ON shop_services(category);
+CREATE INDEX IF NOT EXISTS idx_shop_services_active ON shop_services(is_active);
+
+-- Enable RLS
+ALTER TABLE shop_services ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+CREATE POLICY "Users can view their shop's services"
+  ON shop_services FOR SELECT
+  USING (shop_id IN (SELECT shop_id FROM profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Owners can insert services"
+  ON shop_services FOR INSERT
+  WITH CHECK (shop_id IN (SELECT shop_id FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'owner')));
+
+CREATE POLICY "Owners can update services"
+  ON shop_services FOR UPDATE
+  USING (shop_id IN (SELECT shop_id FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'owner')));
+
+CREATE POLICY "Owners can delete services"
+  ON shop_services FOR DELETE
+  USING (shop_id IN (SELECT shop_id FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'owner')));
+  `.trim();
+}

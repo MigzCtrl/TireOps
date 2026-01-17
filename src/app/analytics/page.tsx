@@ -39,6 +39,7 @@ export default function AnalyticsPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
   const [allInventory, setAllInventory] = useState<any[]>([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
     if (!profile?.shop_id) return;
@@ -46,10 +47,12 @@ export default function AnalyticsPage() {
   }, [profile?.shop_id]);
 
   useEffect(() => {
-    if (allOrders.length > 0 || allCustomers.length > 0 || allInventory.length > 0) {
+    // Only calculate analytics after initial data load completes
+    // This ensures we show zeros for new accounts, not an error
+    if (dataLoaded) {
       calculateAnalytics();
     }
-  }, [timePeriod, allOrders, allCustomers, allInventory]);
+  }, [timePeriod, dataLoaded, allOrders, allCustomers, allInventory]);
 
   async function loadData() {
     if (!profile?.shop_id) return;
@@ -71,6 +74,7 @@ export default function AnalyticsPage() {
       setAllCustomers(customersRes.data || []);
       setAllOrders(ordersRes.data || []);
       setAllInventory(inventoryRes.data || []);
+      setDataLoaded(true);
     } catch (error) {
       console.error('Error loading analytics:', error);
       toast({

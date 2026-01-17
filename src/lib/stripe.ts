@@ -23,14 +23,27 @@ export const stripe = {
   subscriptions: {
     list: (params: Stripe.SubscriptionListParams) => getStripe().subscriptions.list(params),
     retrieve: (id: string) => getStripe().subscriptions.retrieve(id),
+    update: (id: string, params: Stripe.SubscriptionUpdateParams) => getStripe().subscriptions.update(id, params),
+    create: (params: Stripe.SubscriptionCreateParams) => getStripe().subscriptions.create(params),
   },
   customers: {
+    list: (params?: Stripe.CustomerListParams) => getStripe().customers.list(params),
     search: (params: Stripe.CustomerSearchParams) => getStripe().customers.search(params),
     create: (params: Stripe.CustomerCreateParams) => getStripe().customers.create(params),
+  },
+  paymentIntents: {
+    list: (params?: Stripe.PaymentIntentListParams) => getStripe().paymentIntents.list(params),
+    retrieve: (id: string) => getStripe().paymentIntents.retrieve(id),
+    create: (params: Stripe.PaymentIntentCreateParams) => getStripe().paymentIntents.create(params),
+  },
+  setupIntents: {
+    retrieve: (id: string) => getStripe().setupIntents.retrieve(id),
+    create: (params: Stripe.SetupIntentCreateParams) => getStripe().setupIntents.create(params),
   },
   checkout: {
     sessions: {
       create: (params: Stripe.Checkout.SessionCreateParams) => getStripe().checkout.sessions.create(params),
+      retrieve: (id: string, params?: Stripe.Checkout.SessionRetrieveParams) => getStripe().checkout.sessions.retrieve(id, params),
     },
   },
   billingPortal: {
@@ -42,53 +55,92 @@ export const stripe = {
     constructEvent: (body: string, signature: string, secret: string) =>
       getStripe().webhooks.constructEvent(body, signature, secret),
   },
+  products: {
+    list: (params?: Stripe.ProductListParams) => getStripe().products.list(params),
+    create: (params: Stripe.ProductCreateParams) => getStripe().products.create(params),
+  },
+  prices: {
+    create: (params: Stripe.PriceCreateParams) => getStripe().prices.create(params),
+  },
 };
 
-// Pricing tiers
+// Pricing tiers with monthly and yearly options
 export const PRICING_TIERS = {
-  basic: {
-    name: 'Basic',
-    description: 'Perfect for small shops',
-    price: 29,
-    priceId: process.env.STRIPE_PRICE_BASIC || '',
+  starter: {
+    name: 'Starter',
+    description: 'Perfect for getting started',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    monthlyPriceId: '', // Free tier - no Stripe price
+    yearlyPriceId: '',
+    get price() { return this.monthlyPrice; },
+    get priceId() { return this.monthlyPriceId; },
     features: [
-      'Up to 100 work orders/month',
+      '50 customers',
+      '100 inventory items',
+      '25 work orders/month',
       '1 team member',
-      'Basic inventory tracking',
-      'Email support',
+      'Manual data entry',
     ],
   },
   pro: {
     name: 'Professional',
-    description: 'For growing businesses',
-    price: 79,
-    priceId: process.env.STRIPE_PRICE_PRO || '',
+    description: 'For growing tire shops',
+    monthlyPrice: 29,
+    yearlyPrice: 290, // 2 months free
+    monthlyPriceId: process.env.STRIPE_PRICE_PRO_MONTHLY || process.env.STRIPE_PRICE_PRO || '',
+    yearlyPriceId: process.env.STRIPE_PRICE_PRO_YEARLY || '',
+    get price() { return this.monthlyPrice; },
+    get priceId() { return this.monthlyPriceId; },
     features: [
+      '2,000 customers',
+      '1,000 inventory items',
       'Unlimited work orders',
-      'Up to 5 team members',
-      'Advanced inventory management',
-      'Customer SMS reminders',
-      'Analytics dashboard',
-      'Priority support',
+      '5 team members',
+      'AI-powered import',
+      'Online booking',
+      'SMS notifications',
+      'Advanced analytics',
     ],
     popular: true,
   },
   enterprise: {
     name: 'Enterprise',
-    description: 'For large operations',
-    price: 149,
-    priceId: process.env.STRIPE_PRICE_ENTERPRISE || '',
+    description: 'For multi-location businesses',
+    monthlyPrice: 79,
+    yearlyPrice: 790, // 2 months free
+    monthlyPriceId: process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY || process.env.STRIPE_PRICE_ENTERPRISE || '',
+    yearlyPriceId: process.env.STRIPE_PRICE_ENTERPRISE_YEARLY || '',
+    get price() { return this.monthlyPrice; },
+    get priceId() { return this.monthlyPriceId; },
     features: [
-      'Everything in Professional',
+      'Unlimited customers',
+      'Unlimited inventory',
+      'Unlimited work orders',
       'Unlimited team members',
-      'Multi-location support',
-      'Custom integrations',
-      'Dedicated account manager',
-      'Phone support',
-      'Custom reporting',
+      'Everything in Professional',
+      'Multi-shop management',
+      'QuickBooks integration',
+      'Wholesale API access',
+      'AI Assistant (TireBot)',
+      'Priority support',
     ],
   },
 } as const;
+
+export type BillingCycle = 'monthly' | 'yearly';
+
+// Helper to get the correct price ID based on billing cycle
+export function getPriceId(tier: PricingTier, billingCycle: BillingCycle): string {
+  const tierConfig = PRICING_TIERS[tier];
+  return billingCycle === 'yearly' ? tierConfig.yearlyPriceId : tierConfig.monthlyPriceId;
+}
+
+// Helper to get the price amount based on billing cycle
+export function getPrice(tier: PricingTier, billingCycle: BillingCycle): number {
+  const tierConfig = PRICING_TIERS[tier];
+  return billingCycle === 'yearly' ? tierConfig.yearlyPrice : tierConfig.monthlyPrice;
+}
 
 export type PricingTier = keyof typeof PRICING_TIERS;
 

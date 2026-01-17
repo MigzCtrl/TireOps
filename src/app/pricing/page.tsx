@@ -11,53 +11,64 @@ interface PricingTierInfo {
   name: string;
   description: string;
   price: number;
+  yearlyPrice?: number;
   features: string[];
   popular?: boolean;
+  isFree?: boolean;
 }
 
 const PRICING_TIERS: Record<string, PricingTierInfo> = {
-  basic: {
-    name: 'Basic',
-    description: 'Perfect for small shops',
-    price: 29,
+  starter: {
+    name: 'Starter',
+    description: 'Perfect for getting started',
+    price: 0,
+    isFree: true,
     features: [
-      'Up to 100 work orders/month',
+      '50 customers',
+      '100 inventory items',
+      '25 work orders/month',
       '1 team member',
-      'Basic inventory tracking',
-      'Email support',
+      'Manual data entry',
     ],
   },
   pro: {
     name: 'Professional',
-    description: 'For growing businesses',
-    price: 79,
+    description: 'For growing tire shops',
+    price: 29,
+    yearlyPrice: 290,
     features: [
+      '2,000 customers',
+      '1,000 inventory items',
       'Unlimited work orders',
-      'Up to 5 team members',
-      'Advanced inventory management',
-      'Customer SMS reminders',
-      'Analytics dashboard',
-      'Priority support',
+      '5 team members',
+      'AI-powered import',
+      'Online booking',
+      'SMS notifications',
+      'Advanced analytics',
     ],
     popular: true,
   },
   enterprise: {
     name: 'Enterprise',
-    description: 'For large operations',
-    price: 149,
+    description: 'For multi-location businesses',
+    price: 79,
+    yearlyPrice: 790,
     features: [
-      'Everything in Professional',
+      'Unlimited customers',
+      'Unlimited inventory',
+      'Unlimited work orders',
       'Unlimited team members',
-      'Multi-location support',
-      'Custom integrations',
-      'Dedicated account manager',
-      'Phone support',
-      'Custom reporting',
+      'Everything in Professional',
+      'Multi-shop management',
+      'QuickBooks integration',
+      'Wholesale API access',
+      'AI Assistant (TireBot)',
+      'Priority support',
     ],
   },
 };
 
-type PricingTier = 'basic' | 'pro' | 'enterprise';
+type PricingTier = 'starter' | 'pro' | 'enterprise';
 
 function PricingContent() {
   const router = useRouter();
@@ -172,8 +183,14 @@ function PricingContent() {
                 </div>
 
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-text">${tier.price}</span>
-                  <span className="text-text-muted">/month</span>
+                  {tier.isFree ? (
+                    <span className="text-4xl font-bold text-text">Free</span>
+                  ) : (
+                    <>
+                      <span className="text-4xl font-bold text-text">${tier.price}</span>
+                      <span className="text-text-muted">/month</span>
+                    </>
+                  )}
                 </div>
 
                 <ul className="space-y-3 mb-8 flex-1">
@@ -186,8 +203,8 @@ function PricingContent() {
                 </ul>
 
                 <Button
-                  onClick={() => handleSubscribe(key)}
-                  disabled={loading !== null}
+                  onClick={() => tier.isFree ? router.push('/register?tier=starter') : handleSubscribe(key)}
+                  disabled={loading !== null && !tier.isFree}
                   className={`w-full ${
                     tier.popular
                       ? 'bg-primary hover:bg-primary/90'
@@ -199,6 +216,8 @@ function PricingContent() {
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
                       Processing...
                     </>
+                  ) : tier.isFree ? (
+                    'Get Started Free'
                   ) : (
                     'Start Free Trial'
                   )}

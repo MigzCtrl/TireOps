@@ -9,8 +9,9 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePagination, useSort, useFilters, useModal } from '@/hooks';
-import type { WorkOrderWithDetails } from '@/types/database';
+import type { WorkOrderWithDetails, ShopService } from '@/types/database';
 import type { SelectedTire } from '@/components/TireSelector';
+import type { SelectedService } from '@/components/ServiceSelector';
 import { WorkOrderList, WorkOrderForm, WorkOrderFilters, DoubleBookingDialog } from './_components';
 
 const supabase = createClient();
@@ -39,6 +40,7 @@ export default function WorkOrdersPage() {
   const [workOrders, setWorkOrders] = useState<WorkOrderWithDetails[]>([]);
   const [customers, setCustomers] = useState<CustomerBasic[]>([]);
   const [tires, setTires] = useState<TireBasic[]>([]);
+  const [services, setServices] = useState<ShopService[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals
@@ -49,6 +51,7 @@ export default function WorkOrdersPage() {
 
   // Form state
   const [selectedTires, setSelectedTires] = useState<SelectedTire[]>([]);
+  const [selectedServices, setSelectedServices] = useState<SelectedService[]>([]);
   const [stockError, setStockError] = useState<string>('');
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -202,9 +205,10 @@ export default function WorkOrdersPage() {
 
       setWorkOrders(ordersWithNames);
 
-      const [customersRes, tiresRes] = await Promise.all([
+      const [customersRes, tiresRes, servicesRes] = await Promise.all([
         supabase.from('customers').select('id, name').eq('shop_id', profile.shop_id).order('name'),
         supabase.from('inventory').select('id, brand, model, size, price, quantity').eq('shop_id', profile.shop_id).order('brand'),
+        fetch('/api/services').then(r => r.json()),
       ]);
 
       if (customersRes.error) throw customersRes.error;
@@ -212,6 +216,7 @@ export default function WorkOrdersPage() {
 
       setCustomers(customersRes.data || []);
       setTires(tiresRes.data || []);
+      setServices(servicesRes.services || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
@@ -225,11 +230,29 @@ export default function WorkOrdersPage() {
   }
 
   function calculateTotal() {
-    const subtotal = selectedTires.reduce((sum, st) => sum + (st.quantity * st.tire.price), 0);
+    // Tires subtotal
+    const tiresSubtotal = selectedTires.reduce((sum, st) => sum + (st.quantity * st.tire.price), 0);
+
+    // Services subtotals (taxable and non-taxable)
+    let servicesSubtotal = 0;
+    let taxableServicesSubtotal = 0;
+    for (const ss of selectedServices) {
+      const amount = ss.service.price * ss.quantity;
+      servicesSubtotal += amount;
+      if (ss.service.is_taxable) {
+        taxableServicesSubtotal += amount;
+      }
+    }
+
+    // Tax calculation (tires are taxable, services depend on is_taxable flag)
     const taxRate = shop?.tax_rate || 0;
-    const tax = subtotal * (taxRate / 100);
+    const taxableAmount = tiresSubtotal + taxableServicesSubtotal;
+    const tax = taxableAmount * (taxRate / 100);
+
+    const subtotal = tiresSubtotal + servicesSubtotal;
     const total = subtotal + tax;
-    return { subtotal, tax, taxRate, total };
+
+    return { subtotal, tiresSubtotal, servicesSubtotal, tax, taxRate, total };
   }
 
   async function handleInventoryUpdate(tireId: string, quantityChange: number) {
@@ -409,6 +432,7 @@ export default function WorkOrdersPage() {
         status: 'pending',
       });
       setSelectedTires([]);
+      setSelectedServices([]);
       await loadData();
       formModal.close();
     } catch (error) {
@@ -478,6 +502,8 @@ export default function WorkOrdersPage() {
       } else {
         setSelectedTires([]);
       }
+      // TODO: Load selected services when editing (need to store service line items in DB)
+      setSelectedServices([]);
     }
   }
 
@@ -493,6 +519,7 @@ export default function WorkOrdersPage() {
       status: 'pending',
     });
     setSelectedTires([]);
+    setSelectedServices([]);
   }
 
   async function updateStatus(id: string, newStatus: string) {
@@ -611,8 +638,11 @@ export default function WorkOrdersPage() {
               onFormDataChange={setFormData}
               customers={customers}
               tires={tires}
+              services={services}
               selectedTires={selectedTires}
               onSelectedTiresChange={setSelectedTires}
+              selectedServices={selectedServices}
+              onSelectedServicesChange={setSelectedServices}
               stockError={stockError}
               onStockError={setStockError}
               taxRate={shop?.tax_rate || 0}

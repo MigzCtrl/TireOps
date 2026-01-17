@@ -59,7 +59,7 @@ export default function DateTimePicker({
     // Parse date in local timezone to avoid day-off issues
     const [year, month, day] = dateStr.split('-').map(Number);
     const d = new Date(year, month - 1, day);
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
   const formatDisplayTime = (timeStr: string) => {
@@ -83,7 +83,7 @@ export default function DateTimePicker({
     const endHour = 21; // 9:00 PM
 
     for (let hour = startHour; hour <= endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += 5) {
+      for (let minute = 0; minute < 60; minute += 15) {
         // Skip times after 9:00 PM
         if (hour === endHour && minute > 0) break;
 
@@ -99,8 +99,8 @@ export default function DateTimePicker({
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
-    // Round up to next 5-min slot
-    const nextMinute = Math.ceil(currentMinute / 5) * 5;
+    // Round up to next 15-min slot
+    const nextMinute = Math.ceil(currentMinute / 15) * 15;
     const nextHour = nextMinute >= 60 ? currentHour + 1 : currentHour;
     const finalMinute = nextMinute >= 60 ? 0 : nextMinute;
 
@@ -144,23 +144,23 @@ export default function DateTimePicker({
   return (
     <div>
       {label && (
-        <label className="block text-xs font-medium text-text-muted mb-2 uppercase tracking-wide">
+        <label className="block text-sm font-medium text-text mb-1.5">
           {label}
         </label>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="flex gap-2">
         {/* Date Picker */}
-        <div ref={calendarRef} className="relative">
+        <div ref={calendarRef} className="relative flex-1">
           <button
             type="button"
             onClick={() => {
               setShowCalendar(!showCalendar);
               setShowTimePicker(false);
             }}
-            className="w-full h-11 px-3 rounded-lg border border-border-muted bg-bg-light text-text flex items-center gap-2 hover:bg-bg transition-colors focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
+            className="w-full h-10 px-3 rounded-lg border border-border-muted bg-bg text-text flex items-center gap-2 hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50"
           >
-            <Calendar size={16} className="text-text-muted flex-shrink-0" />
-            <span className="flex-1 text-left text-xs">{formatDisplayDate(date)}</span>
+            <Calendar size={16} className="text-primary flex-shrink-0" />
+            <span className="flex-1 text-left text-sm font-medium">{formatDisplayDate(date)}</span>
           </button>
 
           <AnimatePresence>
@@ -170,7 +170,7 @@ export default function DateTimePicker({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full left-0 right-0 mt-2 p-4 rounded-xl bg-bg-light backdrop-blur-xl border border-border-muted shadow-2xl z-50"
+                className="absolute top-full left-0 mt-2 p-4 rounded-xl bg-bg border border-border-muted shadow-xl z-50 min-w-[280px]"
                 suppressHydrationWarning
               >
                 {/* Month Navigation */}
@@ -182,11 +182,11 @@ export default function DateTimePicker({
                       newMonth.setMonth(newMonth.getMonth() - 1);
                       setCurrentMonth(newMonth);
                     }}
-                    className="p-2 rounded-lg bg-bg-light hover:bg-bg border border-border-muted transition-all"
+                    className="p-2 rounded-lg hover:bg-bg-light border border-border-muted transition-all"
                   >
                     <ChevronLeft size={16} className="text-text-muted" />
                   </button>
-                  <h4 className="text-sm font-semibold text-text">
+                  <h4 className="text-sm font-bold text-text">
                     {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </h4>
                   <button
@@ -196,7 +196,7 @@ export default function DateTimePicker({
                       newMonth.setMonth(newMonth.getMonth() + 1);
                       setCurrentMonth(newMonth);
                     }}
-                    className="p-2 rounded-lg bg-bg-light hover:bg-bg border border-border-muted transition-all"
+                    className="p-2 rounded-lg hover:bg-bg-light border border-border-muted transition-all"
                   >
                     <ChevronRight size={16} className="text-text-muted" />
                   </button>
@@ -205,7 +205,7 @@ export default function DateTimePicker({
                 {/* Calendar Grid */}
                 <div className="grid grid-cols-7 gap-1">
                   {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-                    <div key={day} className="text-center text-xs font-semibold text-text-muted py-2">
+                    <div key={day} className="text-center text-xs font-medium text-text-muted py-2">
                       {day}
                     </div>
                   ))}
@@ -228,12 +228,12 @@ export default function DateTimePicker({
                           key={day}
                           type="button"
                           onClick={() => handleDateSelect(day, month, year)}
-                          className={`aspect-square rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                          className={`aspect-square rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer ${
                             selected
-                              ? 'bg-bg-light text-text hover:bg-highlight hover:text-text'
+                              ? 'bg-primary text-white'
                               : today
-                              ? 'bg-info/20 text-text ring-1 ring-info hover:bg-highlight hover:text-text'
-                              : 'text-text hover:bg-highlight hover:text-text'
+                              ? 'bg-primary/20 text-primary ring-1 ring-primary/50'
+                              : 'text-text hover:bg-bg-light'
                           }`}
                         >
                           {day}
@@ -250,17 +250,17 @@ export default function DateTimePicker({
         </div>
 
         {/* Time Picker */}
-        <div ref={timeRef} className="relative">
+        <div ref={timeRef} className="relative w-28">
           <button
             type="button"
             onClick={() => {
               setShowTimePicker(!showTimePicker);
               setShowCalendar(false);
             }}
-            className="w-full h-11 px-3 rounded-lg border border-border-muted bg-bg-light text-text flex items-center gap-2 hover:bg-bg transition-colors focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent"
+            className="w-full h-10 px-3 rounded-lg border border-border-muted bg-bg text-text flex items-center gap-2 hover:border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50"
           >
-            <Clock size={16} className="text-text-muted flex-shrink-0" />
-            <span className="flex-1 text-left text-xs">{formatDisplayTime(time)}</span>
+            <Clock size={16} className="text-primary flex-shrink-0" />
+            <span className="flex-1 text-left text-sm font-medium">{formatDisplayTime(time)}</span>
           </button>
 
           <AnimatePresence>
@@ -270,7 +270,7 @@ export default function DateTimePicker({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.15 }}
-                className="absolute top-full left-0 right-0 mt-2 rounded-xl bg-bg-light backdrop-blur-xl border border-border-muted shadow-2xl z-50 max-h-64 overflow-y-auto"
+                className="absolute top-full right-0 mt-2 rounded-xl bg-bg border border-border-muted shadow-xl z-50 max-h-64 overflow-y-auto min-w-[120px]"
               >
                 {(() => {
                   const timeOptions = generateTimeOptions();
@@ -278,7 +278,7 @@ export default function DateTimePicker({
                   const showCurrentTimeOutsideHours = time && !hasCurrentTime && isOutsideBusinessHours(time);
 
                   return (
-                    <>
+                    <div className="py-1">
                       {/* Show current time if it's outside business hours (for saved work orders) */}
                       {showCurrentTimeOutsideHours && (
                         <button
@@ -288,10 +288,10 @@ export default function DateTimePicker({
                             onTimeChange(time);
                             setShowTimePicker(false);
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm transition-all border-b border-border-muted bg-primary/20 text-primary font-semibold flex items-center justify-between cursor-pointer hover:bg-highlight"
+                          className="w-full px-3 py-2 text-left text-sm transition-all bg-primary/10 text-primary font-medium flex items-center justify-between cursor-pointer hover:bg-primary/20"
                         >
                           <span>{formatDisplayTime(time)}</span>
-                          <span className="text-xs text-warning">(Outside hours)</span>
+                          <span className="text-xs text-warning ml-2">(Outside)</span>
                         </button>
                       )}
 
@@ -304,16 +304,16 @@ export default function DateTimePicker({
                             onTimeChange(timeOption);
                             setShowTimePicker(false);
                           }}
-                          className={`w-full px-4 py-2.5 text-left text-sm transition-all border-b border-border-muted last:border-b-0 cursor-pointer ${
+                          className={`w-full px-3 py-2 text-left text-sm transition-all cursor-pointer ${
                             time === timeOption
-                              ? 'bg-bg-light text-text hover:bg-highlight font-semibold'
-                              : 'text-text hover:bg-highlight'
+                              ? 'bg-primary text-white font-medium'
+                              : 'text-text hover:bg-bg-light'
                           }`}
                         >
                           {formatDisplayTime(timeOption)}
                         </button>
                       ))}
-                    </>
+                    </div>
                   );
                 })()}
               </motion.div>

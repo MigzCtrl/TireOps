@@ -3,12 +3,13 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   Sun, Moon, Search, Bell,
-  Users, Package, ClipboardList, TrendingUp, Home, LogOut, User, Menu, X, Settings, Trash2
+  Users, Package, ClipboardList, TrendingUp, Home, LogOut, User, Menu, X, Settings, Trash2,
+  Mail, AlertTriangle, CheckCircle, Loader2
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, resetClient } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { SwipeableNotification, type LowStockItem } from '@/components/shared/notifications/SwipeableNotification';
 
@@ -40,6 +41,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(true); // Assume verified initially
+  const [verificationBannerDismissed, setVerificationBannerDismissed] = useState(false);
+  const [sendingVerification, setSendingVerification] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -56,6 +61,47 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href);
+  };
+
+  // Check email verification status
+  useEffect(() => {
+    if (user) {
+      // Check if email is confirmed in user metadata
+      const isVerified = user.email_confirmed_at !== null;
+      setEmailVerified(isVerified);
+
+      // Check if banner was dismissed this session
+      const dismissed = sessionStorage.getItem('emailBannerDismissed');
+      if (dismissed === 'true') {
+        setVerificationBannerDismissed(true);
+      }
+    }
+  }, [user]);
+
+  // Resend verification email
+  const handleResendVerification = async () => {
+    if (!user?.email || sendingVerification) return;
+
+    setSendingVerification(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: user.email,
+      });
+
+      if (error) throw error;
+      setVerificationSent(true);
+    } catch (err) {
+      console.error('Failed to resend verification:', err);
+    } finally {
+      setSendingVerification(false);
+    }
+  };
+
+  // Dismiss verification banner for this session
+  const dismissVerificationBanner = () => {
+    setVerificationBannerDismissed(true);
+    sessionStorage.setItem('emailBannerDismissed', 'true');
   };
 
   // Load dismissed notifications from localStorage
@@ -133,19 +179,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return () => clearInterval(interval);
   }, [profile?.shop_id, shop?.low_stock_threshold, supabase]);
 
-  // Handle logout
+  // Handle logout - MUST use full page reload to clear all cached auth state
   async function handleLogout() {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Logout failed:', error);
-      }
-      // CRITICAL FIX: Only push, middleware handles the redirect
-      router.push('/login');
+      await supabase.auth.signOut({ scope: 'global' });
     } catch (err) {
-      console.error('Logout failed:', err);
-      // Ensure navigation even on error
-      router.push('/login');
+      console.error('Logout error:', err);
+    } finally {
+      // Reset the singleton client to clear cached session
+      resetClient();
+      // Force full page reload to clear all auth state
+      window.location.href = '/login';
     }
   }
 
@@ -571,6 +615,62 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
           </div>
         </header>
+
+        {/* Email Verification Banner */}
+        {!emailVerified && !verificationBannerDismissed && (
+          <div className="bg-warning/10 border-b border-warning/20">
+            <div className="px-4 lg:px-8 py-3">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 rounded-full bg-warning/20">
+                    <AlertTriangle size={16} className="text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-text">
+                      Please verify your email address
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      Check your inbox for a verification link to unlock all features
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {verificationSent ? (
+                    <span className="flex items-center gap-1.5 text-sm text-success">
+                      <CheckCircle size={14} />
+                      Email sent!
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleResendVerification}
+                      disabled={sendingVerification}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-warning hover:text-warning/80 transition-colors disabled:opacity-50"
+                    >
+                      {sendingVerification ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Mail size={14} />
+                          Resend email
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={dismissVerificationBanner}
+                    className="p-1 rounded hover:bg-warning/10 text-text-muted hover:text-text transition-colors"
+                    title="Dismiss for this session"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Page Content */}
         <main className="p-4 lg:p-8">{children}</main>

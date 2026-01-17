@@ -42,6 +42,11 @@ export interface Shop {
   slug: string | null
   booking_enabled: boolean | null
   booking_settings: BookingSettings | null
+  stripe_customer_id: string | null
+  subscription_id: string | null
+  subscription_status: 'none' | 'active' | 'past_due' | 'canceled' | 'trialing' | null
+  subscription_tier: 'basic' | 'pro' | 'enterprise' | null
+  subscription_current_period_end: string | null
   created_at: string
   updated_at: string
 }
@@ -128,22 +133,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true
 
-    // Get initial session
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!isMounted) return
+    // Get initial session with proper error handling
+    const initAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser()
 
-      setUser(user)
-      if (user) {
-        loadProfile(user.id)
-      } else {
-        setLoading(false)
+        if (!isMounted) return
+
+        // If there's an error or no user, clear all state
+        if (error || !user) {
+          console.log('[AuthContext] No valid session found')
+          setUser(null)
+          setProfile(null)
+          setShop(null)
+          setLoading(false)
+          return
+        }
+
+        // Verify the user has a valid email (basic sanity check)
+        if (!user.email) {
+          console.warn('[AuthContext] User has no email, clearing session')
+          await supabase.auth.signOut()
+          setUser(null)
+          setProfile(null)
+          setShop(null)
+          setLoading(false)
+          return
+        }
+
+        setUser(user)
+        await loadProfile(user.id)
+      } catch (error) {
+        console.error('[AuthContext] Error initializing auth:', error)
+        if (isMounted) {
+          setUser(null)
+          setProfile(null)
+          setShop(null)
+          setLoading(false)
+        }
       }
-    }).catch((error) => {
-      console.error('[AuthContext] Error getting user:', error)
-      if (isMounted) {
-        setLoading(false)
-      }
-    })
+    }
+
+    initAuth()
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

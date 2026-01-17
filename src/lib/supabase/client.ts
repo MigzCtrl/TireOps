@@ -18,3 +18,8 @@ export function createClient() {
 
   return client;
 }
+
+// Reset the singleton client - call this on sign out to clear stale sessions
+export function resetClient() {
+  client = undefined;
+}

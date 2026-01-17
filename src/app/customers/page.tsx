@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
-import { Users, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Plus, ChevronLeft, ChevronRight, Upload, FileSpreadsheet, Download, X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -45,6 +45,13 @@ export default function CustomersPage() {
   // Modals
   const formModal = useModal<string | null>(); // editingId
   const deleteModal = useModal<Customer>();
+
+  // Import state
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ name: string; phone: string; email: string }[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -326,6 +333,115 @@ export default function CustomersPage() {
     setShowVehicleSection(false);
   }
 
+  // CSV Import functions
+  function parseCSV(text: string): { name: string; phone: string; email: string }[] {
+    const lines = text.split('\n').filter(line => line.trim());
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
+    const nameIdx = headers.findIndex(h => h === 'name' || h === 'customer' || h === 'customer name');
+    const phoneIdx = headers.findIndex(h => h === 'phone' || h === 'phone number' || h === 'tel');
+    const emailIdx = headers.findIndex(h => h === 'email' || h === 'email address');
+
+    if (nameIdx === -1) {
+      setImportError('CSV must have a "name" or "customer name" column');
+      return [];
+    }
+
+    const results: { name: string; phone: string; email: string }[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      const name = values[nameIdx] || '';
+      if (!name) continue;
+
+      results.push({
+        name,
+        phone: phoneIdx !== -1 ? values[phoneIdx] || '' : '',
+        email: emailIdx !== -1 ? values[emailIdx] || '' : '',
+      });
+    }
+    return results;
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportFile(file);
+    setImportError(null);
+    setImportPreview([]);
+
+    try {
+      const text = await file.text();
+      const parsed = parseCSV(text);
+      if (parsed.length > 0) {
+        setImportPreview(parsed.slice(0, 5)); // Preview first 5
+      }
+    } catch (err) {
+      setImportError('Failed to read file');
+    }
+  }
+
+  async function handleImport() {
+    if (!importFile || !profile?.shop_id) return;
+
+    setImporting(true);
+    setImportError(null);
+
+    try {
+      const text = await importFile.text();
+      const customers = parseCSV(text);
+
+      if (customers.length === 0) {
+        setImportError('No valid customers found in file');
+        setImporting(false);
+        return;
+      }
+
+      // Batch insert customers
+      const customerData = customers.map(c => ({
+        shop_id: profile.shop_id,
+        name: c.name,
+        phone: c.phone || null,
+        email: c.email || null,
+      }));
+
+      const { error } = await supabase
+        .from('customers')
+        .insert(customerData);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Import Successful!',
+        description: `${customers.length} customers imported`,
+      });
+
+      setImportModalOpen(false);
+      setImportFile(null);
+      setImportPreview([]);
+      loadData();
+    } catch (err: any) {
+      console.error('Import error:', err);
+      setImportError(err.message || 'Failed to import customers');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function downloadTemplate() {
+    const csvContent = 'Name,Phone,Email\nJohn Doe,(555) 123-4567,john@example.com\nJane Smith,(555) 987-6543,jane@example.com';
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'customer-import-template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
   // Calculate stats
   const stats = {
     total: totalCount,
@@ -379,16 +495,27 @@ export default function CustomersPage() {
             </p>
           </div>
 
-          <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
-            <DialogTrigger asChild>
-              <button
-                disabled={!canEdit}
-                className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-bg-light text-text-muted hover:bg-info hover:text-text transition-colors w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
-              >
-                <Plus size={20} />
-                Add Customer
-              </button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            {/* Import Button */}
+            <button
+              onClick={() => setImportModalOpen(true)}
+              disabled={!canEdit}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-bg-light text-text-muted hover:bg-highlight hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Upload size={18} />
+              Import
+            </button>
+
+            <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
+              <DialogTrigger asChild>
+                <button
+                  disabled={!canEdit}
+                  className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-bg-light text-text-muted hover:bg-info hover:text-text transition-colors w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-bg-light disabled:hover:text-text-muted"
+                >
+                  <Plus size={20} />
+                  Add Customer
+                </button>
+              </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>
@@ -411,7 +538,8 @@ export default function CustomersPage() {
                 onCancel={handleCancelForm}
               />
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         </div>
 
         {/* Stats Cards - Centered data, semantic text colors, no icons */}
@@ -521,6 +649,140 @@ export default function CustomersPage() {
             </div>
           )}
         </div>
+
+        {/* Import Modal */}
+        <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="text-primary" size={20} />
+                Import Customers
+              </DialogTitle>
+              <DialogDescription>
+                Upload a CSV file to import multiple customers at once.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 pt-2">
+              {/* Template download */}
+              <div className="p-4 bg-bg-light rounded-lg border border-border-muted">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-text">Need a template?</p>
+                    <p className="text-xs text-text-muted">Download our CSV template with the correct format</p>
+                  </div>
+                  <button
+                    onClick={downloadTemplate}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg text-text-muted hover:bg-primary hover:text-white transition-colors text-sm"
+                  >
+                    <Download size={16} />
+                    Template
+                  </button>
+                </div>
+              </div>
+
+              {/* File upload area */}
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                  importFile ? 'border-success bg-success/5' : 'border-border-muted hover:border-primary'
+                }`}>
+                  {importFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <CheckCircle className="text-success" size={24} />
+                      <div className="text-left">
+                        <p className="font-medium text-text">{importFile.name}</p>
+                        <p className="text-xs text-text-muted">
+                          {importPreview.length > 0 ? `${importPreview.length}+ customers found` : 'Processing...'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImportFile(null);
+                          setImportPreview([]);
+                          setImportError(null);
+                        }}
+                        className="p-1 rounded hover:bg-bg-light"
+                      >
+                        <X size={16} className="text-text-muted" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="mx-auto mb-3 text-text-muted" size={32} />
+                      <p className="text-sm text-text">Drop your CSV file here or click to browse</p>
+                      <p className="text-xs text-text-muted mt-1">Supports .csv files</p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Preview */}
+              {importPreview.length > 0 && (
+                <div className="border border-border-muted rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 bg-bg-light border-b border-border-muted">
+                    <p className="text-xs font-medium text-text-muted">Preview (first 5 rows)</p>
+                  </div>
+                  <div className="divide-y divide-border-muted max-h-40 overflow-y-auto">
+                    {importPreview.map((row, i) => (
+                      <div key={i} className="px-4 py-2 text-sm">
+                        <span className="font-medium text-text">{row.name}</span>
+                        {row.phone && <span className="text-text-muted ml-2">{row.phone}</span>}
+                        {row.email && <span className="text-text-muted ml-2">{row.email}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Error */}
+              {importError && (
+                <div className="flex items-center gap-2 p-3 bg-danger/10 border border-danger/30 rounded-lg">
+                  <AlertCircle className="text-danger flex-shrink-0" size={18} />
+                  <p className="text-sm text-danger">{importError}</p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setImportModalOpen(false);
+                    setImportFile(null);
+                    setImportPreview([]);
+                    setImportError(null);
+                  }}
+                  className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-bg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleImport}
+                  disabled={!importFile || importing || importPreview.length === 0}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {importing ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={18} />
+                      Import {importPreview.length > 0 ? `${importPreview.length}+ Customers` : ''}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Delete Confirmation Dialog */}
         <DeleteConfirmDialog

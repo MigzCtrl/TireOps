@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Settings, User, Building2, Palette, Bell, Lock, Save,
   Loader2, Check, AlertCircle, Eye, EyeOff, Moon, Sun, AlertTriangle,
-  Users, Mail, Trash2, Copy, UserPlus, Calendar, Link, ExternalLink
+  Users, Mail, Trash2, Copy, UserPlus, Calendar, Link, ExternalLink,
+  CreditCard, Crown, Zap, Shield
 } from 'lucide-react';
+import NextLink from 'next/link';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,11 +16,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { createClient } from '@/lib/supabase/client';
 import { getShopSettingsMigrationSQL } from '@/lib/supabase/migrations';
+import { ServicesTab } from './_components/ServicesTab';
 
 // Get supabase client ONCE outside component to prevent re-creation on renders
 const supabase = createClient();
 
-type SettingsTab = 'profile' | 'business' | 'preferences' | 'notifications' | 'security' | 'team' | 'booking';
+type SettingsTab = 'profile' | 'business' | 'services' | 'preferences' | 'notifications' | 'security' | 'team' | 'booking' | 'subscription';
 
 interface Invitation {
   id: string;
@@ -67,6 +70,10 @@ export default function SettingsPage() {
     slug: '',
     booking_enabled: false,
   });
+
+  // Subscription/billing state
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [linkingSubscription, setLinkingSubscription] = useState(false);
 
   // Initialize data with timeout
   useEffect(() => {
@@ -444,14 +451,72 @@ export default function SettingsPage() {
     }
   }, [shop, isOwner, bookingForm, supabase, refreshProfile, toast]);
 
+  // Open Stripe billing portal
+  const handleOpenBillingPortal = useCallback(async () => {
+    setPortalLoading(true);
+    try {
+      const response = await fetch('/api/stripe/portal', {
+        method: 'POST',
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to open billing portal');
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to open billing portal"
+      });
+    } finally {
+      setPortalLoading(false);
+    }
+  }, [toast]);
+
+  // Find and link Stripe subscription by email
+  const handleLinkSubscription = useCallback(async () => {
+    setLinkingSubscription(true);
+    try {
+      const response = await fetch('/api/stripe/find-and-link', {
+        method: 'POST',
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to link subscription');
+      }
+
+      await refreshProfile();
+      toast({
+        title: "Success!",
+        description: `Your ${data.tier} subscription has been linked.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to link subscription"
+      });
+    } finally {
+      setLinkingSubscription(false);
+    }
+  }, [toast, refreshProfile]);
+
   // Tab config
   const tabs = [
     { id: 'profile' as const, label: 'Profile', icon: User },
     { id: 'business' as const, label: 'Business', icon: Building2, ownerOnly: true },
+    { id: 'services' as const, label: 'Services', icon: Settings, ownerOnly: true },
     { id: 'booking' as const, label: 'Booking', icon: Calendar, ownerOnly: true },
     { id: 'preferences' as const, label: 'Preferences', icon: Palette, ownerOnly: true },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell, ownerOnly: true },
     { id: 'team' as const, label: 'Team', icon: Users, ownerOnly: true },
+    { id: 'subscription' as const, label: 'Subscription', icon: CreditCard, ownerOnly: true },
     { id: 'security' as const, label: 'Security', icon: Lock },
   ];
 
@@ -633,6 +698,11 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                 </div>
+              )}
+
+              {/* Services Tab */}
+              {activeTab === 'services' && isOwner && (
+                <ServicesTab isOwner={isOwner} />
               )}
 
               {/* Booking Tab */}
@@ -1038,6 +1108,209 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Subscription Tab */}
+              {activeTab === 'subscription' && isOwner && (
+                <div className="space-y-6">
+                  {/* Header */}
+                  <div>
+                    <h2 className="text-lg font-semibold text-text">Subscription</h2>
+                    <p className="text-sm text-text-muted">Manage your subscription and billing</p>
+                  </div>
+
+                  {/* Security Trust Banner */}
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-success/10 border border-success/30">
+                    <Shield className="text-success flex-shrink-0" size={20} />
+                    <p className="text-sm text-text-muted">
+                      Payments secured by <span className="font-medium text-text">Stripe</span>.
+                      We never store your card details.
+                    </p>
+                  </div>
+
+                  {/* Current Plan Section */}
+                  <div className="p-6 rounded-lg bg-bg-light border border-border-muted">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <p className="text-sm text-text-muted">Current Plan</p>
+                        <h3 className="text-2xl font-bold text-text flex items-center gap-2">
+                          {shop?.subscription_tier ? (
+                            <>
+                              {shop.subscription_tier === 'enterprise' && <Crown className="text-warning" size={24} />}
+                              {shop.subscription_tier === 'pro' && <Zap className="text-primary" size={24} />}
+                              {shop.subscription_tier === 'basic' && <Building2 className="text-info" size={24} />}
+                              <span className="capitalize">{shop.subscription_tier}</span>
+                            </>
+                          ) : (
+                            'No Active Plan'
+                          )}
+                        </h3>
+                      </div>
+                      {/* Status Badge */}
+                      {shop?.subscription_status && shop.subscription_status !== 'none' && (
+                        <span className={`px-3 py-1 text-sm font-medium rounded-full ${
+                          shop.subscription_status === 'active' ? 'bg-success/20 text-success' :
+                          shop.subscription_status === 'trialing' ? 'bg-info/20 text-info' :
+                          shop.subscription_status === 'past_due' ? 'bg-warning/20 text-warning' :
+                          shop.subscription_status === 'canceled' ? 'bg-danger/20 text-danger' :
+                          'bg-border-muted text-text-muted'
+                        }`}>
+                          {shop.subscription_status === 'active' ? 'Active' :
+                           shop.subscription_status === 'trialing' ? 'Trial' :
+                           shop.subscription_status === 'past_due' ? 'Past Due' :
+                           shop.subscription_status === 'canceled' ? 'Canceled' :
+                           shop.subscription_status}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Billing Period */}
+                    {shop?.subscription_current_period_end && (
+                      <p className="text-sm text-text-muted">
+                        {shop.subscription_status === 'canceled' ? 'Access until: ' : 'Next billing date: '}
+                        <span className="text-text font-medium">
+                          {new Date(shop.subscription_current_period_end).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      </p>
+                    )}
+
+                    {/* Pricing Display */}
+                    {shop?.subscription_tier && (
+                      <div className="mt-4 pt-4 border-t border-border-muted">
+                        <span className="text-3xl font-bold text-text">
+                          ${shop.subscription_tier === 'basic' ? '29' :
+                            shop.subscription_tier === 'pro' ? '59' : '149'}
+                        </span>
+                        <span className="text-text-muted">/month</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Past Due Warning */}
+                  {shop?.subscription_status === 'past_due' && (
+                    <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="text-warning flex-shrink-0 mt-0.5" size={20} />
+                        <div>
+                          <h4 className="font-semibold text-warning">Payment Past Due</h4>
+                          <p className="text-sm text-text-muted mt-1">
+                            Your last payment failed. Please update your payment method to avoid service interruption.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Canceled Warning */}
+                  {shop?.subscription_status === 'canceled' && (
+                    <div className="p-4 rounded-lg bg-danger/10 border border-danger/30">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="text-danger flex-shrink-0 mt-0.5" size={20} />
+                        <div>
+                          <h4 className="font-semibold text-danger">Subscription Canceled</h4>
+                          <p className="text-sm text-text-muted mt-1">
+                            Your subscription has been canceled. You can continue using the service until the end of your billing period.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Features List */}
+                  {shop?.subscription_tier && (
+                    <div className="p-6 rounded-lg bg-bg-light border border-border-muted">
+                      <h4 className="font-semibold text-text mb-4">Your Plan Includes</h4>
+                      <ul className="space-y-3">
+                        {(shop.subscription_tier === 'basic' ? [
+                          'Up to 100 work orders/month',
+                          '1 team member',
+                          'Basic inventory tracking',
+                          'Email support',
+                        ] : shop.subscription_tier === 'pro' ? [
+                          'Unlimited work orders',
+                          'Up to 5 team members',
+                          'Advanced inventory management',
+                          'Customer SMS reminders',
+                          'Analytics dashboard',
+                          'Priority support',
+                        ] : [
+                          'Everything in Professional',
+                          'Unlimited team members',
+                          'Multi-location support',
+                          'Custom integrations',
+                          'Dedicated account manager',
+                          'Phone support',
+                          'Custom reporting',
+                        ]).map((feature, index) => (
+                          <li key={index} className="flex items-center gap-3">
+                            <Check className="text-success flex-shrink-0" size={18} />
+                            <span className="text-text-muted">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="pt-4 border-t border-border-muted">
+                    {shop?.stripe_customer_id ? (
+                      <div className="space-y-3">
+                        <Button
+                          onClick={handleOpenBillingPortal}
+                          disabled={portalLoading}
+                          className="w-full sm:w-auto bg-primary hover:bg-primary/90"
+                        >
+                          {portalLoading ? (
+                            <Loader2 size={16} className="animate-spin mr-2" />
+                          ) : (
+                            <ExternalLink size={16} className="mr-2" />
+                          )}
+                          Manage Billing
+                        </Button>
+                        <p className="text-xs text-text-muted">
+                          Update payment method, view invoices, or cancel subscription
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Link existing payment */}
+                        <div className="p-4 rounded-lg bg-info/10 border border-info/30">
+                          <h4 className="font-medium text-text mb-2">Already paid?</h4>
+                          <p className="text-sm text-text-muted mb-3">
+                            If you've already made a payment but don't see your subscription, click below to find and link it.
+                          </p>
+                          <Button
+                            onClick={handleLinkSubscription}
+                            disabled={linkingSubscription}
+                            variant="outline"
+                            className="w-full sm:w-auto border-info text-info hover:bg-info/10"
+                          >
+                            {linkingSubscription ? (
+                              <Loader2 size={16} className="animate-spin mr-2" />
+                            ) : (
+                              <CreditCard size={16} className="mr-2" />
+                            )}
+                            Link My Subscription
+                          </Button>
+                        </div>
+
+                        {/* Or get a new plan */}
+                        <div className="text-center py-4">
+                          <p className="text-text-muted mb-3">Or get started with a new plan</p>
+                          <NextLink href="/#pricing">
+                            <Button className="bg-primary hover:bg-primary/90">
+                              View Plans
+                            </Button>
+                          </NextLink>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

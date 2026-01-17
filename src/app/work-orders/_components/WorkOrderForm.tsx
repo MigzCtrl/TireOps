@@ -6,6 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import DateTimePicker from '@/components/DateTimePicker';
 import TireSelector, { type SelectedTire } from '@/components/TireSelector';
+import ServiceSelector, { type SelectedService } from '@/components/ServiceSelector';
+import { ShopService } from '@/types/database';
 
 interface CustomerBasic {
   id: string;
@@ -38,8 +40,11 @@ interface WorkOrderFormProps {
   onFormDataChange: (data: FormData) => void;
   customers: CustomerBasic[];
   tires: TireBasic[];
+  services: ShopService[];
   selectedTires: SelectedTire[];
   onSelectedTiresChange: (tires: SelectedTire[]) => void;
+  selectedServices: SelectedService[];
+  onSelectedServicesChange: (services: SelectedService[]) => void;
   stockError: string;
   onStockError: (message: string) => void;
   taxRate: number;
@@ -56,8 +61,11 @@ export function WorkOrderForm({
   onFormDataChange,
   customers,
   tires,
+  services,
   selectedTires,
   onSelectedTiresChange,
+  selectedServices,
+  onSelectedServicesChange,
   stockError,
   onStockError,
   taxRate,
@@ -65,16 +73,40 @@ export function WorkOrderForm({
   onCancel,
   onInventoryUpdate,
 }: WorkOrderFormProps) {
+  // Calculate tire count for service quantity
+  const tireCount = selectedTires.reduce((sum, st) => sum + st.quantity, 0);
+
   const calculateTotal = () => {
-    const subtotal = selectedTires.reduce((sum, st) => sum + (st.quantity * st.tire.price), 0);
-    const tax = subtotal * (taxRate / 100);
+    // Tires subtotal
+    const tiresSubtotal = selectedTires.reduce((sum, st) => sum + (st.quantity * st.tire.price), 0);
+
+    // Services subtotals (taxable and non-taxable)
+    let servicesSubtotal = 0;
+    let taxableServicesSubtotal = 0;
+    for (const ss of selectedServices) {
+      const amount = ss.service.price * ss.quantity;
+      servicesSubtotal += amount;
+      if (ss.service.is_taxable) {
+        taxableServicesSubtotal += amount;
+      }
+    }
+
+    // Tax calculation
+    const taxableAmount = tiresSubtotal + taxableServicesSubtotal;
+    const tax = taxableAmount * (taxRate / 100);
+
+    const subtotal = tiresSubtotal + servicesSubtotal;
     const total = subtotal + tax;
-    return { subtotal, tax, taxRate, total };
+
+    return { subtotal, tiresSubtotal, servicesSubtotal, tax, taxRate, total };
   };
+
+  const totals = calculateTotal();
+  const hasItems = selectedTires.length > 0 || selectedServices.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingId ? 'Edit Work Order' : 'New Work Order'}
@@ -85,13 +117,13 @@ export function WorkOrderForm({
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-6 pt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Basic Info */}
             <div className="space-y-6">
-              {/* Basic Info Section */}
+              {/* Customer & Schedule */}
               <div>
                 <h3 className="text-sm font-semibold text-text uppercase tracking-wide mb-4">
-                  Basic Information
+                  Customer & Schedule
                 </h3>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -113,54 +145,40 @@ export function WorkOrderForm({
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="service_type">Service Type *</Label>
-                    <Select
-                      value={formData.service_type}
-                      onValueChange={(value) => onFormDataChange({ ...formData, service_type: value })}
-                    >
-                      <SelectTrigger id="service_type">
-                        <SelectValue placeholder="Select service" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Tire Installation">Tire Installation</SelectItem>
-                        <SelectItem value="Tire Rotation">Tire Rotation</SelectItem>
-                        <SelectItem value="Tire Repair">Tire Repair</SelectItem>
-                        <SelectItem value="Wheel Alignment">Wheel Alignment</SelectItem>
-                        <SelectItem value="Tire Balance">Tire Balance</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <DateTimePicker
+                    date={formData.scheduled_date}
+                    time={formData.scheduled_time}
+                    onDateChange={(date) => onFormDataChange({ ...formData, scheduled_date: date })}
+                    onTimeChange={(time) => onFormDataChange({ ...formData, scheduled_time: time })}
+                    label="Appointment"
+                  />
                 </div>
               </div>
 
-              {/* Schedule Section */}
-              <div>
-                <DateTimePicker
-                  date={formData.scheduled_date}
-                  time={formData.scheduled_time}
-                  onDateChange={(date) => onFormDataChange({ ...formData, scheduled_date: date })}
-                  onTimeChange={(time) => onFormDataChange({ ...formData, scheduled_time: time })}
-                  label="Schedule Appointment"
-                />
-              </div>
+              {/* Services Selection */}
+              <ServiceSelector
+                services={services}
+                selectedServices={selectedServices}
+                onServicesChange={onSelectedServicesChange}
+                tireCount={tireCount}
+              />
 
               {/* Notes Section */}
               <div className="space-y-2">
-                <Label htmlFor="notes">Additional Notes</Label>
+                <Label htmlFor="notes">Notes</Label>
                 <textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => onFormDataChange({ ...formData, notes: e.target.value })}
-                  placeholder="Add any special instructions or notes..."
-                  className="w-full h-24 px-3 py-2 rounded-lg border border-border-muted bg-bg-light text-text text-sm focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent transition-shadow resize-none"
-                  rows={3}
+                  placeholder="Special instructions..."
+                  className="w-full h-20 px-3 py-2 rounded-lg border border-border-muted bg-bg-light text-text text-sm focus:outline-none focus:ring-2 focus:ring-highlight focus:border-transparent transition-shadow resize-none"
+                  rows={2}
                 />
               </div>
             </div>
 
-            {/* Right Column - Tire Selection */}
-            <div>
+            {/* Middle Column - Tire Selection */}
+            <div className="lg:col-span-2">
               <AnimatePresence>
                 {stockError && (
                   <motion.div
@@ -188,24 +206,68 @@ export function WorkOrderForm({
             </div>
           </div>
 
-          {/* Order Summary with Tax */}
-          {selectedTires.length > 0 && (
-            <div className="p-4 rounded-lg bg-bg-light border border-border-muted">
-              <h4 className="text-sm font-semibold text-text mb-3">Order Summary</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-muted">Subtotal</span>
-                  <span className="text-text">${calculateTotal().subtotal.toFixed(2)}</span>
-                </div>
-                {calculateTotal().taxRate > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-muted">Tax ({calculateTotal().taxRate}%)</span>
-                    <span className="text-text">${calculateTotal().tax.toFixed(2)}</span>
+          {/* Order Summary */}
+          {hasItems && (
+            <div className="p-4 rounded-xl bg-bg-light border border-border-muted">
+              <h4 className="text-sm font-semibold text-text mb-4">Order Summary</h4>
+
+              {/* Line items breakdown */}
+              <div className="space-y-3 mb-4">
+                {/* Tires */}
+                {selectedTires.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Tires</p>
+                    {selectedTires.map((st, idx) => (
+                      <div key={idx} className="flex justify-between text-sm pl-2">
+                        <span className="text-text">
+                          {st.tire.brand} {st.tire.model} × {st.quantity}
+                        </span>
+                        <span className="text-text">${(st.tire.price * st.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
-                <div className="flex justify-between text-base font-semibold pt-2 border-t border-border-muted">
+
+                {/* Services */}
+                {selectedServices.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-text-muted uppercase tracking-wide">Services</p>
+                    {selectedServices.map((ss, idx) => (
+                      <div key={idx} className="flex justify-between text-sm pl-2">
+                        <span className="text-text">
+                          {ss.service.name}
+                          {ss.service.price_type !== 'flat' && ` × ${ss.quantity}`}
+                        </span>
+                        <span className="text-text">${(ss.service.price * ss.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Totals */}
+              <div className="space-y-2 pt-3 border-t border-border-muted">
+                {totals.tiresSubtotal > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-muted">Tires</span>
+                    <span className="text-text">${totals.tiresSubtotal.toFixed(2)}</span>
+                  </div>
+                )}
+                {totals.servicesSubtotal > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-muted">Services</span>
+                    <span className="text-text">${totals.servicesSubtotal.toFixed(2)}</span>
+                  </div>
+                )}
+                {taxRate > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-muted">Tax ({taxRate}%)</span>
+                    <span className="text-text">${totals.tax.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-lg font-semibold pt-2 border-t border-border-muted">
                   <span className="text-text">Total</span>
-                  <span className="text-primary">${calculateTotal().total.toFixed(2)}</span>
+                  <span className="text-primary">${totals.total.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -216,13 +278,14 @@ export function WorkOrderForm({
             <button
               type="button"
               onClick={onCancel}
-              className="sm:flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-danger hover:text-text-muted transition-colors"
+              className="sm:flex-1 px-4 py-2.5 rounded-lg bg-bg-light text-text-muted hover:bg-danger/10 hover:text-danger border border-transparent hover:border-danger/30 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="sm:flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-success hover:text-text-muted transition-colors"
+              disabled={!formData.customer_id || !formData.scheduled_date}
+              className="sm:flex-1 px-4 py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {editingId ? 'Update Work Order' : 'Create Work Order'}
             </button>

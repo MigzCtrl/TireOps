@@ -30,8 +30,8 @@ export default function LoginPage() {
       if (signInError) throw signInError;
 
       if (data.user) {
-        // CRITICAL FIX: Only push, middleware will handle the rest
-        router.push('/');
+        // Force full page reload to ensure fresh auth state
+        window.location.href = '/';
       }
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
@@ -156,8 +156,8 @@ export default function LoginPage() {
           <div className="mt-6 p-4 bg-primary/10 rounded-lg border border-primary">
             <p className="text-sm text-primary text-center">
               Don't have an account?{' '}
-              <Link href="/register" className="font-semibold hover:underline">
-                Sign up
+              <Link href="/#pricing" className="font-semibold hover:underline">
+                View pricing plans
               </Link>
             </p>
           </div>

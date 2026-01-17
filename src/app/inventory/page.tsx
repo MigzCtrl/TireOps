@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   Package, Plus, Search, Download, Trash2, Edit, Check, Loader2,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
-  Minus, History
+  Minus, History, Upload, FileSpreadsheet, X, AlertCircle, CheckCircle
 } from 'lucide-react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,13 @@ export default function InventoryPage() {
   // Modals
   const formModal = useModal<string | null>(); // editingTireId
   const deleteModal = useModal<Tire>();
+
+  // Import state
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ brand: string; model: string; size: string; quantity: number; price: number }[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -348,6 +355,122 @@ export default function InventoryPage() {
     setTimeout(() => setExportStatus('idle'), 2000);
   }
 
+  // CSV Import functions for inventory
+  function parseInventoryCSV(text: string): { brand: string; model: string; size: string; quantity: number; price: number }[] {
+    const lines = text.split('\n').filter(line => line.trim());
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''));
+    const brandIdx = headers.findIndex(h => h === 'brand' || h === 'manufacturer');
+    const modelIdx = headers.findIndex(h => h === 'model' || h === 'product' || h === 'name');
+    const sizeIdx = headers.findIndex(h => h === 'size' || h === 'tire size');
+    const qtyIdx = headers.findIndex(h => h === 'quantity' || h === 'qty' || h === 'stock');
+    const priceIdx = headers.findIndex(h => h === 'price' || h === 'cost' || h === 'unit price');
+
+    if (brandIdx === -1 || modelIdx === -1 || sizeIdx === -1) {
+      setImportError('CSV must have "brand", "model", and "size" columns');
+      return [];
+    }
+
+    const results: { brand: string; model: string; size: string; quantity: number; price: number }[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      const brand = values[brandIdx] || '';
+      const model = values[modelIdx] || '';
+      const size = values[sizeIdx] || '';
+      if (!brand || !model || !size) continue;
+
+      results.push({
+        brand,
+        model,
+        size,
+        quantity: qtyIdx !== -1 ? parseInt(values[qtyIdx]) || 0 : 0,
+        price: priceIdx !== -1 ? parseFloat(values[priceIdx]) || 0 : 0,
+      });
+    }
+    return results;
+  }
+
+  async function handleInventoryFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportFile(file);
+    setImportError(null);
+    setImportPreview([]);
+
+    try {
+      const text = await file.text();
+      const parsed = parseInventoryCSV(text);
+      if (parsed.length > 0) {
+        setImportPreview(parsed.slice(0, 5));
+      }
+    } catch (err) {
+      setImportError('Failed to read file');
+    }
+  }
+
+  async function handleInventoryImport() {
+    if (!importFile || !profile?.shop_id) return;
+
+    setImporting(true);
+    setImportError(null);
+
+    try {
+      const text = await importFile.text();
+      const items = parseInventoryCSV(text);
+
+      if (items.length === 0) {
+        setImportError('No valid inventory items found in file');
+        setImporting(false);
+        return;
+      }
+
+      const inventoryData = items.map(item => ({
+        shop_id: profile.shop_id,
+        brand: item.brand,
+        model: item.model,
+        size: item.size,
+        quantity: item.quantity,
+        price: item.price,
+      }));
+
+      const { error } = await supabase
+        .from('inventory')
+        .insert(inventoryData);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Import Successful!',
+        description: `${items.length} inventory items imported`,
+      });
+
+      setImportModalOpen(false);
+      setImportFile(null);
+      setImportPreview([]);
+      loadInventory();
+    } catch (err: any) {
+      console.error('Import error:', err);
+      setImportError(err.message || 'Failed to import inventory');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function downloadInventoryTemplate() {
+    const csvContent = 'Brand,Model,Size,Quantity,Price\nMichelin,Pilot Sport 4,225/45R17,8,189.99\nGoodyear,Eagle F1,255/35R19,4,249.99\nBridgestone,Potenza RE-71R,245/40R18,12,159.99';
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'inventory-import-template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
   if (authLoading) {
     return (
       <DashboardLayout>
@@ -418,6 +541,16 @@ export default function InventoryPage() {
                   Export
                 </>
               )}
+            </button>
+
+            {/* Import Button */}
+            <button
+              onClick={() => setImportModalOpen(true)}
+              disabled={!isOwner}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-light text-text hover:bg-highlight hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Upload size={16} />
+              Import
             </button>
 
             <Dialog open={formModal.isOpen} onOpenChange={(open) => open ? formModal.open(null) : formModal.close()}>
@@ -781,6 +914,145 @@ export default function InventoryPage() {
             </>
           )}
         </div>
+
+        {/* Import Modal */}
+        <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="text-primary" size={20} />
+                Import Inventory
+              </DialogTitle>
+              <DialogDescription>
+                Upload a CSV file to import multiple inventory items at once.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 pt-2">
+              {/* Template download */}
+              <div className="p-4 bg-bg-light rounded-lg border border-border-muted">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-text">Need a template?</p>
+                    <p className="text-xs text-text-muted">Download our CSV template with the correct format</p>
+                  </div>
+                  <button
+                    onClick={downloadInventoryTemplate}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-bg text-text-muted hover:bg-primary hover:text-white transition-colors text-sm"
+                  >
+                    <Download size={16} />
+                    Template
+                  </button>
+                </div>
+              </div>
+
+              {/* File upload area */}
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleInventoryFileSelect}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                  importFile ? 'border-success bg-success/5' : 'border-border-muted hover:border-primary'
+                }`}>
+                  {importFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <CheckCircle className="text-success" size={24} />
+                      <div className="text-left">
+                        <p className="font-medium text-text">{importFile.name}</p>
+                        <p className="text-xs text-text-muted">
+                          {importPreview.length > 0 ? `${importPreview.length}+ items found` : 'Processing...'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImportFile(null);
+                          setImportPreview([]);
+                          setImportError(null);
+                        }}
+                        className="p-1 rounded hover:bg-bg-light"
+                      >
+                        <X size={16} className="text-text-muted" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="mx-auto mb-3 text-text-muted" size={32} />
+                      <p className="text-sm text-text">Drop your CSV file here or click to browse</p>
+                      <p className="text-xs text-text-muted mt-1">Supports .csv files</p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Preview */}
+              {importPreview.length > 0 && (
+                <div className="border border-border-muted rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 bg-bg-light border-b border-border-muted">
+                    <p className="text-xs font-medium text-text-muted">Preview (first 5 rows)</p>
+                  </div>
+                  <div className="divide-y divide-border-muted max-h-40 overflow-y-auto">
+                    {importPreview.map((row, i) => (
+                      <div key={i} className="px-4 py-2 text-sm flex items-center justify-between">
+                        <div>
+                          <span className="font-medium text-text">{row.brand} {row.model}</span>
+                          <span className="text-text-muted ml-2">{row.size}</span>
+                        </div>
+                        <div className="text-right text-text-muted text-xs">
+                          <span>Qty: {row.quantity}</span>
+                          <span className="ml-2">${row.price}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Error */}
+              {importError && (
+                <div className="flex items-center gap-2 p-3 bg-danger/10 border border-danger/30 rounded-lg">
+                  <AlertCircle className="text-danger flex-shrink-0" size={18} />
+                  <p className="text-sm text-danger">{importError}</p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setImportModalOpen(false);
+                    setImportFile(null);
+                    setImportPreview([]);
+                    setImportError(null);
+                  }}
+                  className="flex-1 px-4 py-2 rounded-lg bg-bg-light text-text-muted hover:bg-bg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleInventoryImport}
+                  disabled={!importFile || importing || importPreview.length === 0}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {importing ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={18} />
+                      Import {importPreview.length > 0 ? `${importPreview.length}+ Items` : ''}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Delete Confirmation Dialog */}
         {deleteModal.data && (

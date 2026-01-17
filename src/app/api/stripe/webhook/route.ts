@@ -28,10 +28,11 @@ function getWebhookSecret(): string {
   return process.env.STRIPE_WEBHOOK_SECRET;
 }
 
-// Determine tier from price ID
+// Determine tier from price ID (checks both monthly and yearly prices)
 function getTierFromPriceId(priceId: string): PricingTier | null {
   for (const [key, value] of Object.entries(PRICING_TIERS)) {
-    if (value.priceId === priceId) {
+    // Check both monthly and yearly price IDs
+    if (value.monthlyPriceId === priceId || value.yearlyPriceId === priceId) {
       return key as PricingTier;
     }
   }
@@ -129,6 +130,7 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
         const shopId = subscription.metadata?.shop_id;
@@ -147,13 +149,14 @@ export async function POST(request: NextRequest) {
             .update({
               subscription_status: subscription.status,
               subscription_tier: tier,
+              subscription_id: subscription.id,
               subscription_current_period_end: periodEnd
                 ? new Date(periodEnd * 1000).toISOString()
                 : null,
             })
             .eq('id', shopId);
 
-          console.log(`Subscription updated for shop ${shopId}: ${subscription.status}`);
+          console.log(`Subscription ${event.type === 'customer.subscription.created' ? 'created' : 'updated'} for shop ${shopId}: ${subscription.status}, tier: ${tier}`);
         }
         break;
       }

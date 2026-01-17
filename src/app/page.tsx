@@ -366,13 +366,16 @@ export default function DashboardPage() {
     });
   };
 
+  // Show neutral loading screen - don't show dashboard layout until we know user is authenticated
+  // This prevents the "flash" of dashboard content for unauthenticated users
   if (authLoading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-text-muted">Loading...</div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Loading...</p>
         </div>
-      </DashboardLayout>
+      </div>
     );
   }
 

@@ -44,24 +44,29 @@ const features = [
 const pricingPlans = [
   {
     name: 'Starter',
+    tier: 'starter',
     price: 'Free',
+    period: '',
     description: 'Perfect for getting started',
-    features: ['Up to 50 customers', 'Basic work orders', 'Email support'],
+    features: ['50 customers', '25 work orders/month', '1 team member', 'Manual data entry'],
+    isFree: true,
   },
   {
     name: 'Professional',
+    tier: 'pro',
     price: '$29',
     period: '/month',
     description: 'For growing tire shops',
-    features: ['Unlimited customers', 'Online booking', 'SMS notifications', 'Analytics', 'Priority support'],
+    features: ['2,000 customers', 'Unlimited work orders', '5 team members', 'AI-powered import', 'SMS notifications', 'Analytics'],
     popular: true,
   },
   {
     name: 'Enterprise',
+    tier: 'enterprise',
     price: '$79',
     period: '/month',
-    description: 'For multi-location shops',
-    features: ['Everything in Pro', 'Multiple locations', 'API access', 'Custom integrations', 'Dedicated support'],
+    description: 'For multi-location businesses',
+    features: ['Unlimited everything', 'Multi-shop management', 'QuickBooks integration', 'AI Assistant (TireBot)', 'Priority support'],
   },
 ];
 
@@ -82,7 +87,7 @@ export default function LandingPage() {
               <a href="#features" className="text-slate-300 hover:text-white transition-colors">Features</a>
               <a href="#pricing" className="text-slate-300 hover:text-white transition-colors">Pricing</a>
               <Link href="/login" className="text-slate-300 hover:text-white transition-colors">Sign In</Link>
-              <Link href="/register">
+              <Link href="/checkout/pro">
                 <Button className="bg-blue-600 hover:bg-blue-700">Get Started</Button>
               </Link>
             </div>
@@ -118,9 +123,9 @@ export default function LandingPage() {
               and grow your business with powerful tools designed just for you.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/register">
+              <Link href="/checkout/pro">
                 <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-lg px-8 h-14">
-                  Start Free Trial
+                  Get Started
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
@@ -246,7 +251,7 @@ export default function LandingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/register">
+                <Link href={(plan as { isFree?: boolean }).isFree ? '/register?tier=starter' : `/checkout/${plan.tier}`}>
                   <Button
                     className={`w-full ${
                       plan.popular
@@ -254,7 +259,7 @@ export default function LandingPage() {
                         : 'bg-slate-700 hover:bg-slate-600'
                     }`}
                   >
-                    Get Started
+                    {(plan as { isFree?: boolean }).isFree ? 'Start Free' : 'Get Started'}
                   </Button>
                 </Link>
               </motion.div>
@@ -272,9 +277,9 @@ export default function LandingPage() {
           <p className="text-xl text-blue-100 mb-8">
             Join hundreds of tire shops already using TireOps to grow their business.
           </p>
-          <Link href="/register">
+          <Link href="/checkout/pro">
             <Button size="lg" className="bg-white text-blue-600 hover:bg-slate-100 text-lg px-8 h-14">
-              Start Your Free Trial
+              Get Started Today
               <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
           </Link>
