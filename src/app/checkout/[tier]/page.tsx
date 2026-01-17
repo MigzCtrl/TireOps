@@ -109,7 +109,7 @@ function PaymentForm({
   email,
   onBack,
 }: {
-  selectedPlan: typeof PLANS.basic;
+  selectedPlan: typeof PLANS[keyof typeof PLANS];
   billingCycle: 'monthly' | 'yearly';
   price: number;
   tier: PlanKey;
